@@ -1,0 +1,26 @@
+[project]
+name = "Eventpass"
+description = "Event ticketing contract."
+authors = ["eventpass-team"]
+telemetry = true
+cache_dir = "./.cache"
+requirements = []
+
+[contracts.event-pass]
+path = "contracts/event-pass.clar"
+clarity_version = 1
+epoch = "2.05"
+depends_on = []
+
+[repl.analysis]
+passes = ["check_checker"]
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = "https://api.hiro.so"
