@@ -1,0 +1,28 @@
+<svg width="480" height="320" viewBox="0 0 480 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="480" height="320" rx="32" fill="#FBF5F2" />
+  <g filter="url(#filter0_f)">
+    <ellipse cx="360" cy="60" rx="180" ry="140" fill="url(#paint0_radial)" />
+  </g>
+  <g filter="url(#filter1_f)">
+    <ellipse cx="140" cy="240" rx="150" ry="110" fill="url(#paint1_radial)" />
+  </g>
+  <path d="M180 220L220 140L260 220L300 160L340 220" stroke="#2F2A59" stroke-opacity="0.4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="220" cy="110" r="26" fill="#FFFFFF" fill-opacity="0.65" />
+  <circle cx="260" cy="96" r="18" fill="#FFFFFF" fill-opacity="0.4" />
+  <defs>
+    <filter id="filter0_f" x="120" y="-140" width="480" height="400" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="70" />
+    </filter>
+    <filter id="filter1_f" x="-70" y="100" width="420" height="280" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="60" />
+    </filter>
+    <radialGradient id="paint0_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(360 60) rotate(90) scale(140 180)">
+      <stop stop-color="#FC6432" stop-opacity="0.5" />
+      <stop offset="1" stop-color="#FC6432" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="paint1_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(140 240) rotate(90) scale(110 150)">
+      <stop stop-color="#FF9F7A" stop-opacity="0.4" />
+      <stop offset="1" stop-color="#FF9F7A" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+</svg>

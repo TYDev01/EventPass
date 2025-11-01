@@ -1,0 +1,1 @@
+self.__NEXT_FONT_MANIFEST="{\"pages\":{},\"app\":{\"/home/tony/Desktop/Dev/Protocols/Stacks/eventpass/frontend/app/layout\":[\"static/media/a22b1dc24103c00d-s.p.woff2\"]},\"appUsingSizeAdjust\":true,\"pagesUsingSizeAdjust\":false}"
