@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppConfig, UserSession, showConnect } from "@stacks/connect";
 import { Loader2, LogOut } from "lucide-react";
 
@@ -34,59 +34,66 @@ const extractAddress = (data: Record<string, any>) => {
   return null;
 };
 
-export function ConnectWalletButton({ className }: { className?: string }) {
-  const userSession = useMemo(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    const appConfig = new AppConfig(appScopes);
-    return new UserSession({ appConfig });
-  }, []);
+const clearSessionStore = (session: UserSession) => {
+  const store = session.store as { deleteSessionData?: () => void };
+  if (typeof store.deleteSessionData === "function") {
+    store.deleteSessionData();
+  }
+};
 
+export function ConnectWalletButton({ className }: { className?: string }) {
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!userSession) {
+    if (typeof window === "undefined") {
       return;
     }
 
-    try {
-      if (userSession.isUserSignedIn()) {
-        const data = userSession.loadUserData();
-        const stxAddress = extractAddress(data);
-        setAddress(stxAddress ?? null);
-        return;
-      }
-    } catch (error) {
-      console.warn("Failed to restore Leather session, clearing cached data.", error);
-      userSession.store.deleteSessionData?.();
-      setAddress(null);
-      setIsLoading(false);
-    }
+    const appConfig = new AppConfig(appScopes);
+    const session = new UserSession({ appConfig });
+    setUserSession(session);
 
-    if (userSession.isSignInPending()) {
-      userSession
-        .handlePendingSignIn()
-        .then(() => {
-          const data = userSession.loadUserData();
+    const hydrateSession = async () => {
+      try {
+        if (session.isUserSignedIn()) {
+          const data = session.loadUserData();
           const stxAddress = extractAddress(data);
           setAddress(stxAddress ?? null);
-        })
-        .catch((error) => {
+          return;
+        }
+      } catch (error) {
+        console.warn("Failed to restore Leather session, clearing cached data.", error);
+        clearSessionStore(session);
+        setAddress(null);
+        setIsLoading(false);
+      }
+
+      if (session.isSignInPending()) {
+        try {
+          await session.handlePendingSignIn();
+          const data = session.loadUserData();
+          const stxAddress = extractAddress(data);
+          setAddress(stxAddress ?? null);
+        } catch (error) {
           console.warn("Leather sign-in failed. Clearing cached session.", error);
-          userSession.store.deleteSessionData?.();
+          clearSessionStore(session);
           setAddress(null);
           setIsLoading(false);
-        });
-    }
-  }, [userSession]);
+        }
+      }
+    };
+
+    hydrateSession();
+  }, []);
 
   const handleDisconnect = useCallback(() => {
     if (!userSession) {
       return;
     }
     userSession.signUserOut(window.location.href);
+    clearSessionStore(userSession);
     setAddress(null);
     setIsLoading(false);
   }, [userSession]);
