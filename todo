@@ -1,0 +1,68 @@
+Build a modern, professional event ticketing website using Next.js (App Router) and shadcn/ui.
+The design should follow this exact theme:
+
+Background: White base with smooth accent gradients using #fc6432 (burnt orange).
+
+Example: subtle radial gradient in top-right corner blending white → #fc6432 (10% opacity).
+
+Header (Navbar):
+
+Transparent glassmorphism effect (blur + opacity + backdrop-filter).
+
+Slight rounded corners (2xl).
+
+The navbar does not touch the edges of the browser — it’s centered horizontally with padding on both sides.
+
+Contains:
+
+Logo (left)
+
+Navigation links (“Home”, “Events”, “My Tickets”, “Create Event”)
+
+“Connect Wallet” button on the right.
+
+Typography: Use modern, clean fonts (e.g. Inter, Manrope, or Urbanist).
+
+Layout:
+
+Hero section with large event banner, short tagline, and a “Browse Events” button.
+
+Events grid below (cards using shadcn’s <Card /> with shadows, rounded corners, and hover scale).
+
+Each card should show:
+
+Event image
+
+Title
+
+Date
+
+Location
+
+Price / “Buy Ticket” button.
+
+Footer: Minimal with small logo, copyright, and social links.
+
+Transitions: Smooth hover and fade animations using Framer Motion.
+
+Tech stack:
+
+Next.js 14+ (App Router)
+
+TailwindCSS + shadcn/ui components
+
+Framer Motion for animations
+
+Lucide icons for minimal line icons
+
+Files to include:
+
+/components/Header.tsx
+
+/components/EventCard.tsx
+
+/components/Footer.tsx
+
+/app/page.tsx (Hero + Events Grid)
+
+The resulting design should feel elegant, glassy, and high-end, suitable for a real-world ticketing brand.
