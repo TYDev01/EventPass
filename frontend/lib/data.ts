@@ -14,8 +14,8 @@ export type EventPassEvent = {
 export const events: EventPassEvent[] = [
   {
     id: 1,
-    title: "Stacks Summit 2024",
-    date: "June 21, 2024",
+    title: "Stacks Summit 2025",
+    date: "June 21, 2025",
     location: "Miami, USA",
     price: "120 STX",
     status: "Active",
@@ -27,7 +27,7 @@ export const events: EventPassEvent[] = [
   {
     id: 2,
     title: "DeFi Horizons Live",
-    date: "July 12, 2024",
+    date: "July 12, 2025",
     location: "Lisbon, Portugal",
     price: "95 STX",
     status: "Active",
@@ -39,7 +39,7 @@ export const events: EventPassEvent[] = [
   {
     id: 3,
     title: "Metaverse Nights",
-    date: "August 30, 2024",
+    date: "August 30, 2025",
     location: "Seoul, South Korea",
     price: "150 STX",
     status: "Ended",
@@ -51,7 +51,7 @@ export const events: EventPassEvent[] = [
   {
     id: 4,
     title: "Creator Lab Pop-up",
-    date: "September 18, 2024",
+    date: "September 18, 2025",
     location: "Berlin, Germany",
     price: "75 STX",
     status: "Canceled",

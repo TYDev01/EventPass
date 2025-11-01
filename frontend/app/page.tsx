@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 
 import { Header } from "@/components/Header";
@@ -46,7 +47,7 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button size="lg" variant="outline" className="gap-2" asChild>
-                <a href="#create">Create Event</a>
+                <Link href="/create">Create Event</Link>
               </Button>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -116,10 +117,10 @@ export default function HomePage() {
               </p>
             </div>
             <Button variant="ghost" className="gap-2" asChild>
-              <a href="#create">
+              <Link href="/create">
                 Create new event
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
+              </Link>
             </Button>
           </div>
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">

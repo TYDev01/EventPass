@@ -33,6 +33,22 @@ Sample event data mirrors the smart contract states:
 
 Feel free to replace the mock event data in `lib/data.ts` with live contract queries once an API layer is available.
 
+### Environment
+
+Expose your deployed EventPass contract to the client by adding the identifier to `.env.local`:
+
+```bash
+NEXT_PUBLIC_CONTRACT_ADDRESS=ST2S0QHZC65P50HFAA2P7GD9CJBT48KDJ9DNYGDSK.event-pass
+```
+
+The create-event form derives the contract address and name from this identifier before submitting the transaction.
+
 ## Wallet Integration
 
 The header’s **Connect Wallet** action authenticates with the Leather browser wallet using Stacks Connect. Signed-in addresses display inline, and users can disconnect to clear the session.
+
+- Network: the connector forces `network: "testnet"` and uses the Stacks testnet core API, so ensure the Leather extension is configured for testnet accounts.
+
+## Create Flow
+
+Visit `/create` (or the **Create Event** link in the navigation) to launch the on-chain publisher. The form validates inputs, opens Leather via `openContractCall`, and reports the resulting transaction ID once submitted.
