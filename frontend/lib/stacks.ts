@@ -46,7 +46,14 @@ export const extractAddress = (data: Record<string, any> | null | undefined) => 
     if (typeof profile.stxAddress === "string") {
       return profile.stxAddress;
     }
-    return profile.stxAddress.mainnet ?? profile.stxAddress.testnet ?? null;
+    const { mainnet, testnet } = profile.stxAddress as Record<string, string | undefined>;
+    if (CONNECT_NETWORK === "testnet") {
+      return testnet ?? mainnet ?? null;
+    }
+    if (CONNECT_NETWORK === "mainnet") {
+      return mainnet ?? testnet ?? null;
+    }
+    return testnet ?? mainnet ?? null;
   }
   return null;
 };

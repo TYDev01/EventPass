@@ -4,11 +4,14 @@ export type EventPassEvent = {
   date: string;
   location: string;
   price: string;
-  status: "Active" | "Ended" | "Canceled";
+  status: "Active" | "Ended" | "Canceled" | "Pending";
   seats: number;
   sold: number;
   image: string;
   description: string;
+  creator?: string;
+  isOnChain?: boolean;
+  txId?: string;
 };
 
 export const events: EventPassEvent[] = [
@@ -22,7 +25,8 @@ export const events: EventPassEvent[] = [
     seats: 250,
     sold: 192,
     image: "/images/stacks-summit.svg",
-    description: "A flagship builders summit exploring the Clarity smart contract ecosystem and EventPass ticket NFTs."
+    description: "A flagship builders summit exploring the Clarity smart contract ecosystem and EventPass ticket NFTs.",
+    creator: "ST2F9A7B18RY8FJ48FJH0K52PYQ7R7C91WZ0XR4RB"
   },
   {
     id: 2,
@@ -34,7 +38,8 @@ export const events: EventPassEvent[] = [
     seats: 180,
     sold: 143,
     image: "/images/defi-horizons.svg",
-    description: "Hands-on masterclasses and live coding sessions focused on decentralized finance experiences."
+    description: "Hands-on masterclasses and live coding sessions focused on decentralized finance experiences.",
+    creator: "ST3PFH72F39KHM1BQK7Z9WTEXAMPLE3R47906WJ8"
   },
   {
     id: 3,
@@ -46,7 +51,8 @@ export const events: EventPassEvent[] = [
     seats: 320,
     sold: 320,
     image: "/images/metaverse-nights.svg",
-    description: "Immersive art installations and performances celebrating the intersection of culture and Web3."
+    description: "Immersive art installations and performances celebrating the intersection of culture and Web3.",
+    creator: "ST1ZH2F4JCYJY6BMF8CNS7EAVYKVBWNP5QNX4M7ZW"
   },
   {
     id: 4,
@@ -58,6 +64,7 @@ export const events: EventPassEvent[] = [
     seats: 120,
     sold: 0,
     image: "/images/creator-lab.svg",
-    description: "An intimate salon for creators to prototype token-gated experiences with EventPass primitives."
+    description: "An intimate salon for creators to prototype token-gated experiences with EventPass primitives.",
+    creator: "ST3NM6HGEDSN5QBCPB8SHA1EJ4YXEXAMPLE3T9PY"
   }
 ];

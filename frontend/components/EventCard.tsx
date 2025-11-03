@@ -2,20 +2,24 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { CalendarDays, MapPin, Ticket } from "lucide-react";
+import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { EventPassEvent } from "@/lib/data";
-import { cn } from "@/lib/utils";
+import { cn, summarizePrincipal } from "@/lib/utils";
 
 const statusStyles: Record<EventPassEvent["status"], string> = {
   Active: "text-primary bg-primary/10",
   Ended: "text-foreground/70 bg-foreground/5",
-  Canceled: "text-red-500 bg-red-100"
+  Canceled: "text-red-500 bg-red-100",
+  Pending: "text-amber-700 bg-amber-100"
 };
 
 export function EventCard({ event }: { event: EventPassEvent }) {
+  const isActive = event.status === "Active";
+  const isPending = event.status === "Pending";
+
   return (
     <motion.div
       whileHover={{ y: -6, scale: 1.015 }}
@@ -53,10 +57,16 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
             {event.location}
           </div>
+          {event.creator ? (
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
+              {summarizePrincipal(event.creator)}
+            </div>
+          ) : null}
         </CardContent>
         <CardFooter>
-          <Button className="w-full" variant={event.status === "Active" ? "default" : "outline"}>
-            {event.status === "Active" ? "Buy Ticket" : "View Details"}
+          <Button className="w-full" variant={isActive ? "default" : "outline"} disabled={isPending}>
+            {isActive ? "Buy Ticket" : isPending ? "Pending confirmation" : "View Details"}
           </Button>
         </CardFooter>
       </Card>

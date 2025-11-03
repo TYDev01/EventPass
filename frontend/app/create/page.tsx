@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
+import { EVENT_IMAGE_POOL, fetchNextEventId } from "@/lib/events";
+import { addPendingEvent } from "@/lib/pending-events";
 
 const MAX_TITLE_LENGTH = 64;
 const MAX_DATE_LENGTH = 32;
@@ -155,16 +157,33 @@ export default function CreateEventPage() {
         message: "Review and confirm the transaction in your Leather wallet to publish the event."
       });
 
-      const priceInMicroStx = BigInt(Math.round(Number(price) * 1_000_000));
-      const seatsValue = BigInt(Number(totalSeats));
+      const trimmedTitle = title.trim();
+      const trimmedDate = date.trim();
+      const numericPrice = Number(price);
+      const numericSeats = Number(totalSeats);
+      const priceInMicroStx = BigInt(Math.round(numericPrice * 1_000_000));
+      const seatsValue = BigInt(numericSeats);
+      let expectedEventId: number | undefined;
+
+      try {
+        if (!address) {
+          throw new Error("Wallet address unavailable while predicting event id.");
+        }
+        const nextId = await fetchNextEventId(address);
+        expectedEventId = Number(nextId);
+      } catch (error) {
+        console.warn("Unable to predict event id before submission", error);
+      }
+
+      const imageIndex = Math.floor(Math.random() * EVENT_IMAGE_POOL.length);
 
       await openContractCall({
         contractAddress,
         contractName,
         functionName: "create-event",
         functionArgs: [
-          stringAsciiCV(title.trim()),
-          stringAsciiCV(date.trim()),
+          stringAsciiCV(trimmedTitle),
+          stringAsciiCV(trimmedDate),
           uintCV(priceInMicroStx),
           uintCV(seatsValue)
         ],
@@ -180,9 +199,20 @@ export default function CreateEventPage() {
         },
         onFinish: (payload) => {
           setIsSubmitting(false);
+          addPendingEvent({
+            txId: payload.txId,
+            title: trimmedTitle,
+            date: trimmedDate,
+            priceMicroStx: priceInMicroStx.toString(),
+            totalSeats: numericSeats,
+            creator: address ?? "",
+            createdAt: Date.now(),
+            imageIndex,
+            expectedEventId
+          });
           setFeedback({
             tone: "success",
-            message: `Event creation submitted! Track status via tx ${payload.txId}.`
+            message: `Event creation submitted! Track status via tx ${payload.txId}. Your listing will appear once the transaction confirms.`
           });
           resetForm();
           void refreshSession();

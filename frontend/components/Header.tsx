@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 
 const navLinks = [
-  { href: "#", label: "Home" },
-  { href: "#events", label: "Events" },
+  { href: "/", label: "Home" },
+  { href: "/events", label: "Events" },
   { href: "#tickets", label: "My Tickets" },
   { href: "/create", label: "Create Event" }
 ];
@@ -23,7 +23,7 @@ export function Header() {
       className="sticky top-6 z-50 flex justify-center px-4"
     >
       <nav className="glass-panel flex w-full max-w-5xl items-center justify-between rounded-2xl px-6 py-4">
-        <Link href="#" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <Ticket className="h-5 w-5" aria-hidden="true" />
           </span>
