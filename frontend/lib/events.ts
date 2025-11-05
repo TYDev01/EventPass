@@ -8,8 +8,8 @@ import {
   type ClarityValue,
   type OptionalCV,
   type TupleCV
-} from "@stacks/transactions-v6";
-import { StacksTestnet } from "@stacks/network-v6";
+} from "@stacks/transactions";
+import { createNetwork } from "@stacks/network";
 
 import { TESTNET_CORE_API, getContractParts } from "@/lib/stacks";
 
@@ -22,9 +22,9 @@ export const EVENT_IMAGE_POOL = [
 
 export const MICROSTX = 1_000_000n;
 
-const network = new StacksTestnet({ url: TESTNET_CORE_API });
+const network = createNetwork({ network: "testnet", client: { baseUrl: TESTNET_CORE_API } });
 
-const DEFAULT_SENDER = "ST2S0QHZC65P50HFAA2P7GD9CJBT48KDJ9DNYGDSK.event-pass";
+const DEFAULT_SENDER = "ST000000000000000000002AMW42H";
 
 const resolveSenderAddress = (senderAddress: string | null | undefined, contractAddress: string) => {
   if (senderAddress && senderAddress.length > 0) {
@@ -47,6 +47,7 @@ export type OnChainEvent = {
   soldSeats: number;
   status: EventStatus;
   creator: string;
+  metadataUri: string;
 };
 
 const mapStatusCode = (code: bigint): EventStatus => {
@@ -149,6 +150,7 @@ const parseEventTuple = (eventId: number, tuple: TupleCV): OnChainEvent => {
   const soldSeats = Number(readUInt(tuple, "sold-seats"));
   const status = mapStatusCode(readUInt(tuple, "status"));
   const creator = readPrincipal(tuple, "creator", DEFAULT_SENDER);
+  const metadataUri = readString(tuple, "metadata-uri", "");
 
   return {
     id: eventId,
@@ -158,7 +160,8 @@ const parseEventTuple = (eventId: number, tuple: TupleCV): OnChainEvent => {
     totalSeats,
     soldSeats,
     status,
-    creator
+    creator,
+    metadataUri
   };
 };
 

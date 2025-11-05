@@ -1,13 +1,20 @@
 "use client";
 
+import { useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { openContractCall } from "@stacks/connect";
+import { createNetwork } from "@stacks/network";
+import { uintCV } from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { EventPassEvent } from "@/lib/data";
 import { cn, summarizePrincipal } from "@/lib/utils";
+import { useStacks } from "@/components/StacksProvider";
+import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
 
 const statusStyles: Record<EventPassEvent["status"], string> = {
   Active: "text-primary bg-primary/10",
@@ -17,8 +24,88 @@ const statusStyles: Record<EventPassEvent["status"], string> = {
 };
 
 export function EventCard({ event }: { event: EventPassEvent }) {
+  const router = useRouter();
+  const { userSession, connect } = useStacks();
+  const [{ contractAddress, contractName }] = useState(() => getContractParts());
+  const contractConfigured = Boolean(contractAddress && contractName);
+  const network = useMemo(
+    () => createNetwork({ network: "testnet", client: { baseUrl: TESTNET_CORE_API } }),
+    []
+  );
+
   const isActive = event.status === "Active";
   const isPending = event.status === "Pending";
+  const isOnChain = Boolean(event.isOnChain);
+  const isSoldOut = isActive && event.sold >= event.seats;
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  const handleBuyClick = useCallback(async () => {
+    if (!isActive || isPending || isPurchasing || isSoldOut) {
+      return;
+    }
+
+    if (!isOnChain) {
+      router.push("/events");
+      return;
+    }
+
+    if (!contractConfigured) {
+      console.warn("Contract address not configured. Unable to initiate ticket purchase.");
+      return;
+    }
+
+    if (!userSession) {
+      connect();
+      return;
+    }
+
+    const seatNumber = event.sold + 1;
+    if (seatNumber <= 0 || seatNumber > event.seats) {
+      console.warn("Unable to determine an available seat for purchase.", {
+        sold: event.sold,
+        seats: event.seats
+      });
+      return;
+    }
+
+    try {
+      setIsPurchasing(true);
+      await openContractCall({
+        contractAddress,
+        contractName,
+        functionName: "purchase-ticket",
+        functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))],
+        userSession,
+        appDetails: buildAppDetails(),
+        network,
+        onCancel: () => {
+          setIsPurchasing(false);
+        },
+        onFinish: () => {
+          setIsPurchasing(false);
+        }
+      });
+    } catch (error) {
+      console.error("Unable to start ticket purchase", error);
+      setIsPurchasing(false);
+    }
+  }, [
+    connect,
+    contractAddress,
+    contractConfigured,
+    contractName,
+    event.id,
+    event.seats,
+    event.sold,
+    isActive,
+    isOnChain,
+    isPending,
+    isPurchasing,
+    isSoldOut,
+    network,
+    router,
+    userSession
+  ]);
 
   return (
     <motion.div
@@ -64,10 +151,33 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             </div>
           ) : null}
         </CardContent>
-        <CardFooter>
-          <Button className="w-full" variant={isActive ? "default" : "outline"} disabled={isPending}>
-            {isActive ? "Buy Ticket" : isPending ? "Pending confirmation" : "View Details"}
+        <CardFooter className="flex flex-col gap-2">
+          <Button
+            className="w-full"
+            variant={isActive && !isSoldOut ? "default" : "outline"}
+            disabled={!isActive || isPending || isPurchasing || isSoldOut}
+            onClick={handleBuyClick}
+          >
+            {isSoldOut
+              ? "Sold Out"
+              : isPending
+              ? "Pending confirmation"
+              : isActive
+              ? "Buy Ticket"
+              : "View Details"}
           </Button>
+          {event.metadataUri ? (
+            <Button
+              className="w-full"
+              variant="ghost"
+              size="sm"
+              asChild
+            >
+              <a href={event.metadataUri} target="_blank" rel="noopener noreferrer">
+                View NFT metadata
+              </a>
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
     </motion.div>

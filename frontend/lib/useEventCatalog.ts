@@ -44,7 +44,8 @@ const mapOnChainToDisplay = (events: OnChainEvent[]): EventPassEvent[] =>
       description: `Minted by ${creatorLabel} with EventPass smart contracts.`,
       location: "EventPass • On-chain drop",
       creator: event.creator,
-      isOnChain: true
+      isOnChain: true,
+      metadataUri: event.metadataUri
     };
   });
 
@@ -104,7 +105,8 @@ const mapPendingToDisplayEvents = (records: PendingEventRecord[]): EventPassEven
         location: "Pending on-chain confirmation",
         creator: record.creator,
         isOnChain: false,
-        txId: record.txId
+        txId: record.txId,
+        metadataUri: record.metadataUri
       };
     });
 
@@ -120,7 +122,9 @@ const reconcilePendingRecords = (
   const confirmedSignatures = new Set(
     onChainEvents.map(
       (event) =>
-        `${event.title.toLowerCase()}|${event.date.toLowerCase()}|${event.creator}|${event.priceMicroStx.toString()}|${event.totalSeats}`
+        `${event.title.toLowerCase()}|${event.date.toLowerCase()}|${event.creator}|${event.priceMicroStx.toString()}|${event.totalSeats}|${(
+          event.metadataUri || ""
+        ).toLowerCase()}`
     )
   );
 
@@ -131,7 +135,9 @@ const reconcilePendingRecords = (
     if (!pending.creator) {
       return true;
     }
-    const signature = `${pending.title.toLowerCase()}|${pending.date.toLowerCase()}|${pending.creator}|${pending.priceMicroStx}|${pending.totalSeats}`;
+    const signature = `${pending.title.toLowerCase()}|${pending.date.toLowerCase()}|${pending.creator}|${pending.priceMicroStx}|${pending.totalSeats}|${(
+      pending.metadataUri || ""
+    ).toLowerCase()}`;
     return !confirmedSignatures.has(signature);
   });
 };

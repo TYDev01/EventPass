@@ -4,9 +4,9 @@ import { FormEvent, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { openContractCall } from "@stacks/connect";
-import { StacksTestnet } from "@stacks/network-v6";
+import { createNetwork } from "@stacks/network";
 import { stringAsciiCV, uintCV } from "@stacks/transactions";
-import { ArrowLeft, Wallet } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Wallet } from "lucide-react";
 
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -18,11 +18,24 @@ import { Label } from "@/components/ui/label";
 import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
 import { EVENT_IMAGE_POOL, fetchNextEventId } from "@/lib/events";
 import { addPendingEvent } from "@/lib/pending-events";
+import {
+  canCreateEventToday,
+  millisUntilNextCreation,
+  recordEventCreation
+} from "@/lib/creation-limit";
 
 const MAX_TITLE_LENGTH = 64;
 const MAX_DATE_LENGTH = 32;
+const MAX_METADATA_URI_LENGTH = 256;
+const MAX_IMAGE_SIZE_BYTES = 1_000_000;
 
-const stacksTestnet = new StacksTestnet({ url: TESTNET_CORE_API });
+const PINATA_GATEWAY_URL =
+  process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL ?? "https://gateway.pinata.cloud/ipfs/";
+
+const stacksTestnet = createNetwork({
+  network: "testnet",
+  client: { baseUrl: TESTNET_CORE_API }
+});
 
 const initialFeedback = {
   message: "Review your event details before publishing on-chain.",
@@ -34,6 +47,11 @@ type FeedbackTone = "info" | "success" | "error";
 type Feedback = {
   message: string;
   tone: FeedbackTone;
+};
+
+type AttributeInput = {
+  traitType: string;
+  value: string;
 };
 
 const formatFeedbackClasses = (tone: FeedbackTone) => {
@@ -56,6 +74,12 @@ export default function CreateEventPage() {
   const [date, setDate] = useState("");
   const [price, setPrice] = useState("");
   const [totalSeats, setTotalSeats] = useState("");
+  const [metadataName, setMetadataName] = useState("");
+  const [metadataDescription, setMetadataDescription] = useState("");
+  const [metadataExternalUrl, setMetadataExternalUrl] = useState("");
+  const [metadataAttributes, setMetadataAttributes] = useState<AttributeInput[]>([]);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(() =>
     contractConfigured
@@ -68,11 +92,63 @@ export default function CreateEventPage() {
   );
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
 
+  const formatDuration = (millis: number) => {
+    const totalSeconds = Math.ceil(millis / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${Math.max(minutes, 1)}m`;
+  };
+
   const resetForm = () => {
     setTitle("");
     setDate("");
     setPrice("");
     setTotalSeats("");
+    setMetadataName("");
+    setMetadataDescription("");
+    setMetadataExternalUrl("");
+    setMetadataAttributes([]);
+    setImageFile(null);
+    setImageError(null);
+  };
+
+  const handleImageSelection = (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      setImageFile(null);
+      return;
+    }
+    const file = files[0];
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setImageError("Image exceeds 1MB limit.");
+      setImageFile(null);
+      return;
+    }
+    setImageError(null);
+    setImageFile(file);
+  };
+
+  const addAttributeRow = () => {
+    setMetadataAttributes((prev) => [...prev, { traitType: "", value: "" }]);
+  };
+
+  const updateAttribute = (index: number, key: keyof AttributeInput, value: string) => {
+    setMetadataAttributes((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [key]: value
+            }
+          : item
+      )
+    );
+  };
+
+  const removeAttributeRow = (index: number) => {
+    setMetadataAttributes((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const validateInputs = () => {
@@ -91,6 +167,15 @@ export default function CreateEventPage() {
         message: "Connect your Leather wallet to create a new event."
       });
       connect();
+      return false;
+    }
+
+    if (!canCreateEventToday(address)) {
+      const remaining = millisUntilNextCreation(address);
+      setFeedback({
+        tone: "error",
+        message: `You can create another event in ${formatDuration(remaining)}.`
+      });
       return false;
     }
 
@@ -136,6 +221,41 @@ export default function CreateEventPage() {
       return false;
     }
 
+    if (!metadataName.trim()) {
+      setFeedback({
+        tone: "error",
+        message: "Metadata name is required."
+      });
+      return false;
+    }
+
+    if (!metadataDescription.trim()) {
+      setFeedback({
+        tone: "error",
+        message: "Metadata description is required."
+      });
+      return false;
+    }
+
+    if (!imageFile) {
+      setFeedback({
+        tone: "error",
+        message: "Upload an NFT image smaller than 1MB."
+      });
+      return false;
+    }
+
+    if (imageFile.size > MAX_IMAGE_SIZE_BYTES) {
+      setFeedback({
+        tone: "error",
+        message: "The selected image is larger than 1MB. Please choose a smaller file."
+      });
+      setImageError("Image exceeds 1MB limit.");
+      return false;
+    }
+
+    setImageError(null);
+
     return true;
   };
 
@@ -177,6 +297,70 @@ export default function CreateEventPage() {
 
       const imageIndex = Math.floor(Math.random() * EVENT_IMAGE_POOL.length);
 
+      if (!imageFile) {
+        throw new Error("NFT image missing from form submission.");
+      }
+
+      const imageForm = new FormData();
+      imageForm.append("file", imageFile);
+      imageForm.append(
+        "pinataMetadata",
+        JSON.stringify({
+          name: `${trimmedTitle}-${Date.now()}`
+        })
+      );
+
+      const imageUploadResponse = await fetch("/api/pinata/upload", {
+        method: "POST",
+        body: imageForm
+      });
+
+      if (!imageUploadResponse.ok) {
+        const errorPayload = await imageUploadResponse.json().catch(() => null);
+        throw new Error(
+          errorPayload?.error ?? "Failed to upload ticket artwork to Pinata. Please try again."
+        );
+      }
+
+      const imageUploadData = await imageUploadResponse.json();
+      const imageCid = imageUploadData.cid as string;
+      const imageUrl = `${PINATA_GATEWAY_URL}${imageCid}`;
+
+      const metadataPayload = {
+        name: metadataName.trim(),
+        description: metadataDescription.trim(),
+        image: imageUrl,
+        ...(metadataExternalUrl.trim()
+          ? { external_url: metadataExternalUrl.trim() }
+          : {}),
+        attributes: metadataAttributes
+          .filter((item) => item.traitType.trim() && item.value.trim())
+          .map((item) => ({
+            trait_type: item.traitType.trim(),
+            value: item.value.trim()
+          }))
+      };
+
+      const metadataResponse = await fetch("/api/pinata/metadata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(metadataPayload)
+      });
+
+      if (!metadataResponse.ok) {
+        const errorPayload = await metadataResponse.json().catch(() => null);
+        throw new Error(
+          errorPayload?.error ??
+            "Failed to upload metadata to Pinata. Please try again after checking your inputs."
+        );
+      }
+
+      const metadataData = await metadataResponse.json();
+      const metadataCid = metadataData.cid as string;
+      const metadataUri = `${PINATA_GATEWAY_URL}${metadataCid}`;
+
       await openContractCall({
         contractAddress,
         contractName,
@@ -185,7 +369,8 @@ export default function CreateEventPage() {
           stringAsciiCV(trimmedTitle),
           stringAsciiCV(trimmedDate),
           uintCV(priceInMicroStx),
-          uintCV(seatsValue)
+          uintCV(seatsValue),
+          stringAsciiCV(metadataUri.slice(0, MAX_METADATA_URI_LENGTH))
         ],
         userSession,
         appDetails: buildAppDetails(),
@@ -208,8 +393,10 @@ export default function CreateEventPage() {
             creator: address ?? "",
             createdAt: Date.now(),
             imageIndex,
-            expectedEventId
+            expectedEventId,
+            metadataUri
           });
+          recordEventCreation(address);
           setFeedback({
             tone: "success",
             message: `Event creation submitted! Track status via tx ${payload.txId}. Your listing will appear once the transaction confirms.`
@@ -326,6 +513,142 @@ export default function CreateEventPage() {
                 />
               </div>
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="metadata-name">NFT name</Label>
+              <Input
+                id="metadata-name"
+                placeholder="Stacks Summit 2025 Ticket"
+                value={metadataName}
+                onChange={(event) => setMetadataName(event.target.value)}
+                maxLength={MAX_TITLE_LENGTH}
+                disabled={isSubmitting}
+                required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="metadata-description">NFT description</Label>
+              <textarea
+                id="metadata-description"
+                placeholder="Describe the experience your attendees unlock."
+                value={metadataDescription}
+                onChange={(event) => setMetadataDescription(event.target.value)}
+                className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isSubmitting}
+                required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="metadata-external-url">External URL (optional)</Label>
+              <Input
+                id="metadata-external-url"
+                placeholder="https://eventpass.xyz/your-event"
+                value={metadataExternalUrl}
+                onChange={(event) => setMetadataExternalUrl(event.target.value)}
+                maxLength={MAX_METADATA_URI_LENGTH}
+                disabled={isSubmitting}
+              />
+              <p className="text-xs text-muted-foreground">
+                This appears in wallets as the “view on web” link.
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="metadata-image">Ticket artwork (max 1MB)</Label>
+              <Input
+                id="metadata-image"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={(event) => handleImageSelection(event.target.files)}
+                disabled={isSubmitting}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Upload high-resolution artwork (PNG, JPG, SVG, or WEBP). Maximum 1MB.
+              </p>
+              {imageFile ? (
+                <p className="text-xs text-muted-foreground">
+                  Selected: {imageFile.name} ({Math.round(imageFile.size / 1024)} KB)
+                </p>
+              ) : null}
+              {imageError ? <p className="text-xs text-red-600">{imageError}</p> : null}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Attributes (optional)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={addAttributeRow}
+                  disabled={isSubmitting}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Add attribute
+                </Button>
+              </div>
+              {metadataAttributes.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No attributes yet. Add trait and value pairs to surface collectibles details in wallets.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {metadataAttributes.map((attribute, index) => (
+                    <div
+                      key={`attribute-${index}`}
+                      className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:gap-3"
+                    >
+                      <div className="grid gap-1">
+                        <Label htmlFor={`trait-${index}`} className="text-xs text-muted-foreground">
+                          Trait type
+                        </Label>
+                        <Input
+                          id={`trait-${index}`}
+                          placeholder="Section"
+                          value={attribute.traitType}
+                          onChange={(event) => updateAttribute(index, "traitType", event.target.value)}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label htmlFor={`value-${index}`} className="text-xs text-muted-foreground">
+                          Value
+                        </Label>
+                        <Input
+                          id={`value-${index}`}
+                          placeholder="VIP"
+                          value={attribute.value}
+                          onChange={(event) => updateAttribute(index, "value", event.target.value)}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => removeAttributeRow(index)}
+                        disabled={isSubmitting}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        <span className="sr-only">Remove attribute row</span>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {address && !canCreateEventToday(address) ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                You can create another event in {formatDuration(millisUntilNextCreation(address))}.
+              </div>
+            ) : null}
+
 
             <div className="flex flex-wrap items-center justify-between gap-4">
               {shortAddress ? (

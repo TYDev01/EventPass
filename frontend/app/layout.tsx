@@ -6,7 +6,9 @@ import "./globals.css";
 
 const urbanist = Urbanist({
   subsets: ["latin"],
-  variable: "--font-urbanist"
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-urbanist",
+  display: "swap"
 });
 
 export const metadata: Metadata = {

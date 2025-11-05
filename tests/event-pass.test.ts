@@ -12,6 +12,7 @@ const DEFAULT_EVENT = {
   date: "2025-05-12",
   price: 1_000n,
   totalSeats: 3n,
+  metadataUri: "https://metadata.example/devcon.json",
 };
 
 const STATUS_ACTIVE = 0n;
@@ -37,17 +38,18 @@ function createEvent({
   date = DEFAULT_EVENT.date,
   price = DEFAULT_EVENT.price,
   totalSeats = DEFAULT_EVENT.totalSeats,
+  metadataUri = DEFAULT_EVENT.metadataUri,
 } = {}) {
   const call = simnet.callPublicFn(
     "event-pass",
     "create-event",
-    [Cl.stringAscii(title), Cl.stringAscii(date), Cl.uint(price), Cl.uint(totalSeats)],
+    [Cl.stringAscii(title), Cl.stringAscii(date), Cl.uint(price), Cl.uint(totalSeats), Cl.stringAscii(metadataUri)],
     creator,
   );
 
   const eventId = unwrapOkUint(call.result);
 
-  return { eventId, args: { title, date, price, totalSeats } };
+  return { eventId, args: { title, date, price, totalSeats, metadataUri } };
 }
 
 describe("event-pass contract", () => {
@@ -55,7 +57,13 @@ describe("event-pass contract", () => {
     const creation = simnet.callPublicFn(
       "event-pass",
       "create-event",
-      [Cl.stringAscii("Invalid"), Cl.stringAscii("2025-01-01"), Cl.uint(1_000n), Cl.uint(0)],
+      [
+        Cl.stringAscii("Invalid"),
+        Cl.stringAscii("2025-01-01"),
+        Cl.uint(1_000n),
+        Cl.uint(0),
+        Cl.stringAscii("https://metadata.example/invalid.json"),
+      ],
       creator,
     );
 
@@ -64,6 +72,20 @@ describe("event-pass contract", () => {
 
   it("registers events with metadata and increments the event id counter", () => {
     const { eventId, args } = createEvent();
+
+    const { result: initialTokenUri } = simnet.callReadOnlyFn(
+      "event-pass",
+      "get-token-uri",
+      [
+        Cl.tuple({
+          "event-id": Cl.uint(eventId),
+          seat: Cl.uint(1),
+        }),
+      ],
+      creator,
+    );
+
+    expect(initialTokenUri).toBeOk(Cl.none());
 
     const { result: eventRaw } = simnet.callReadOnlyFn(
       "event-pass",
@@ -81,6 +103,7 @@ describe("event-pass contract", () => {
     expect(eventFields["total-seats"]).toBeUint(args.totalSeats);
     expect(eventFields["sold-seats"]).toBeUint(0);
     expect(eventFields.status).toBeUint(STATUS_ACTIVE);
+    expect(eventFields["metadata-uri"]).toBeAscii(args.metadataUri);
 
     const { result: nextIdRaw } = simnet.callReadOnlyFn(
       "event-pass",
@@ -141,6 +164,7 @@ describe("event-pass contract", () => {
     expect(updatedFields["total-seats"]).toBeUint(args.totalSeats);
     expect(updatedFields["sold-seats"]).toBeUint(1);
     expect(updatedFields.status).toBeUint(STATUS_ACTIVE);
+    expect(updatedFields["metadata-uri"]).toBeAscii(args.metadataUri);
 
     const { result: metadataRaw } = simnet.callReadOnlyFn(
       "event-pass",
@@ -156,6 +180,20 @@ describe("event-pass contract", () => {
         owner: Cl.standardPrincipal(buyer),
       }),
     );
+
+    const { result: tokenUriAfterPurchase } = simnet.callReadOnlyFn(
+      "event-pass",
+      "get-token-uri",
+      [
+        Cl.tuple({
+          "event-id": Cl.uint(eventId),
+          seat: Cl.uint(1),
+        }),
+      ],
+      buyer,
+    );
+
+    expect(tokenUriAfterPurchase).toBeOk(Cl.some(Cl.stringAscii(args.metadataUri)));
 
     const seatTwoPurchase = simnet.callPublicFn(
       "event-pass",
@@ -194,6 +232,7 @@ describe("event-pass contract", () => {
     const soldOutFields = unwrapEventTuple(eventSoldOutRaw).value;
     expect(soldOutFields["sold-seats"]).toBeUint(3);
     expect(soldOutFields.status).toBeUint(STATUS_ACTIVE);
+    expect(soldOutFields["metadata-uri"]).toBeAscii(args.metadataUri);
 
     const soldOutAttempt = simnet.callPublicFn(
       "event-pass",
@@ -202,6 +241,36 @@ describe("event-pass contract", () => {
       buyer,
     );
     expect(soldOutAttempt.result).toBeErr(Cl.uint(104));
+  });
+
+  it("lets the contract deployer set and expose a contract metadata URI", () => {
+    const metadataUri = "https://metadata.example/collection.json";
+    const setMetadata = simnet.callPublicFn(
+      "event-pass",
+      "set-contract-metadata",
+      [Cl.some(Cl.stringAscii(metadataUri))],
+      creator,
+    );
+
+    expect(setMetadata.result).toBeOk(Cl.some(Cl.stringAscii(metadataUri)));
+
+    const { result: contractUriRaw } = simnet.callReadOnlyFn(
+      "event-pass",
+      "get-contract-uri",
+      [],
+      creator,
+    );
+
+    expect(contractUriRaw).toBeOk(Cl.some(Cl.stringAscii(metadataUri)));
+
+    const unauthorized = simnet.callPublicFn(
+      "event-pass",
+      "set-contract-metadata",
+      [Cl.some(Cl.stringAscii("https://metadata.example/hijack.json"))],
+      buyer,
+    );
+
+    expect(unauthorized.result).toBeErr(Cl.uint(107));
   });
 
   it("rejects double-booking the same seat for an event", () => {

@@ -12,6 +12,7 @@ export type PendingEventRecord = {
   createdAt: number;
   imageIndex: number;
   expectedEventId?: number;
+  metadataUri?: string;
 };
 
 const readStorage = (): PendingEventRecord[] => {
