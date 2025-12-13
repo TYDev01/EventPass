@@ -28,17 +28,14 @@
   {uri: (string-ascii 256)})
 
 (define-data-var contract-metadata-uri (optional (string-ascii 256)) none) ;; Optional contract-level metadata URI advertised through SIP-016.
-
-(define-trait sip016-token-uri-trait ;; Trait describing the SIP-016 metadata interface.
-  (
-    (get-contract-uri () (response (optional (string-ascii 256)) uint)) ;; Returns an optional contract metadata URI or an error code.
-    (get-token-uri (token-id {event-id: uint, seat: uint}) (response (optional (string-ascii 256)) uint)) ;; Returns an optional token metadata URI for the supplied identifier.
-  ))
-
-(impl-trait .sip016-token-uri-trait) ;; Declare compliance with the SIP-016 metadata interface.
+(define-data-var deployer principal tx-sender) ;; Store the contract deployer as the owner.
 
 (define-non-fungible-token ticket ;; Declaration of the NFT collection used to represent tickets.
   {event-id: uint, seat: uint}) ;; Each NFT token identifier is the pair of event identifier and seat number.
+
+;; function contract-owner: returns the principal that deployed this contract.
+(define-read-only (contract-owner)
+  (var-get deployer))
 
 ;; function get-next-event-id: exposes the identifier that will be used for the next event registration.
 (define-read-only (get-next-event-id) ;; Read-only helper that reveals the next event identifier that will be assigned.
