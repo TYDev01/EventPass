@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
-import { uintCV } from "@stacks/transactions";
+import { uintCV, PostConditionMode, makeStandardSTXPostCondition, FungibleConditionCode } from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -70,11 +70,27 @@ export function EventCard({ event }: { event: EventPassEvent }) {
 
     try {
       setIsPurchasing(true);
+      
+      // Create post-condition to allow STX transfer
+      const postConditions = [];
+      if (event.priceMicroStx && event.priceMicroStx > 0n) {
+        const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
+        postConditions.push(
+          makeStandardSTXPostCondition(
+            userAddress,
+            FungibleConditionCode.LessEqual,
+            event.priceMicroStx
+          )
+        );
+      }
+      
       await openContractCall({
         contractAddress,
         contractName,
         functionName: "purchase-ticket",
         functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))],
+        postConditions,
+        postConditionMode: PostConditionMode.Deny,
         userSession,
         appDetails: buildAppDetails(),
         network,

@@ -38,6 +38,7 @@ const mapOnChainToDisplay = (events: OnChainEvent[]): EventPassEvent[] =>
       title: event.title,
       date: event.date,
       price: priceLabel,
+      priceMicroStx: event.priceMicroStx,
       status: event.status,
       seats: event.totalSeats,
       sold: event.soldSeats,
