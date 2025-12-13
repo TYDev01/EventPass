@@ -11,9 +11,10 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { EventImage } from "@/components/EventImage";
 import { useStacks } from "@/components/StacksProvider";
 import { TESTNET_CORE_API, getContractParts } from "@/lib/stacks";
-import { fetchOnChainEvents, getEventImageByIndex, formatPriceFromMicroStx } from "@/lib/events";
+import { fetchOnChainEvents, formatPriceFromMicroStx } from "@/lib/events";
 import type { OnChainEvent } from "@/lib/events";
 
 type UserTicket = {
@@ -230,8 +231,9 @@ export default function MyTicketsPage() {
                 >
                   <Card className="overflow-hidden border-white/50 bg-white/90 shadow-xl transition-all hover:shadow-2xl">
                     <div className="relative h-48 overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5">
-                      <img
-                        src={getEventImageByIndex(ticket.event.id)}
+                      <EventImage
+                        metadataUri={ticket.event.metadataUri}
+                        eventId={ticket.event.id}
                         alt={ticket.event.title}
                         className="h-full w-full object-cover"
                       />

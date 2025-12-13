@@ -8,12 +8,17 @@ import { Header } from "@/components/Header";
 import { EventCard } from "@/components/EventCard";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { events } from "@/lib/data";
+import { useEventCatalog } from "@/lib/useEventCatalog";
 
 export default function HomePage() {
-  const activeEvents = events.filter((event) => event.status === "Active").length;
-  const totalTickets = events.reduce((acc, event) => acc + event.sold, 0);
-  const totalCapacity = events.reduce((acc, event) => acc + event.seats, 0);
+  const { events, stats, isLoading } = useEventCatalog();
+  
+  // Show only first 6 events on homepage
+  const featuredEvents = events.slice(0, 6);
+  
+  const activeEvents = stats.active;
+  const totalTickets = stats.minted;
+  const totalCapacity = stats.capacity;
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
@@ -35,7 +40,7 @@ export default function HomePage() {
               EventPass • Powered by Clarity smart contracts
             </div>
             <h1 className="text-pretty text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
-              Mint unforgettable experiences with glassy, on-chain ticketing.
+              Mint unforgettable experiences with Secured, on-chain ticketing.
             </h1>
             <p className="max-w-xl text-lg text-muted-foreground">
               EventPass ensures every ticket is unique, traceable, and enforceable on-chain. Launch events, manage
@@ -124,9 +129,24 @@ export default function HomePage() {
             </Button>
           </div>
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-            {events.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
+            {isLoading ? (
+              <div className="col-span-full rounded-2xl border border-dashed border-primary/40 bg-white/60 px-6 py-12 text-center text-sm text-muted-foreground">
+                Loading events from the blockchain...
+              </div>
+            ) : featuredEvents.length === 0 ? (
+              <div className="col-span-full rounded-2xl border border-dashed border-primary/40 bg-white/60 px-6 py-12 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No events found. Be the first to create one!
+                </p>
+                <Button className="mt-4" asChild>
+                  <Link href="/create">Create Event</Link>
+                </Button>
+              </div>
+            ) : (
+              featuredEvents.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))
+            )}
           </div>
         </motion.section>
       </main>
