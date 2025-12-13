@@ -13,6 +13,7 @@ import {
   Pc
 } from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,13 +98,31 @@ export function EventCard({ event }: { event: EventPassEvent }) {
         network,
         onCancel: () => {
           setIsPurchasing(false);
+          toast.info("Purchase cancelled");
         },
-        onFinish: () => {
+        onFinish: (data) => {
           setIsPurchasing(false);
+          if (data.txId) {
+            toast.success(
+              `Ticket purchase submitted! Transaction ID: ${data.txId.slice(0, 8)}...`,
+              {
+                description: "Your ticket will be minted once the transaction confirms.",
+                duration: 6000
+              }
+            );
+          } else {
+            toast.success("Ticket purchase submitted!");
+          }
         }
       });
     } catch (error) {
       console.error("Unable to start ticket purchase", error);
+      toast.error(
+        "Failed to purchase ticket",
+        {
+          description: error instanceof Error ? error.message : "Please try again"
+        }
+      );
       setIsPurchasing(false);
     }
   }, [

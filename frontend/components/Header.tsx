@@ -10,7 +10,7 @@ import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/events", label: "Events" },
-  { href: "#tickets", label: "My Tickets" },
+  { href: "/my-tickets", label: "My Tickets" },
   { href: "/create", label: "Create Event" }
 ];
 
