@@ -6,7 +6,12 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
-import { uintCV, PostConditionMode, makeStandardSTXPostCondition, FungibleConditionCode } from "@stacks/transactions";
+import { 
+  uintCV, 
+  PostConditionMode, 
+  FungibleConditionCode,
+  Pc
+} from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -76,11 +81,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
       if (event.priceMicroStx && event.priceMicroStx > 0n) {
         const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
         postConditions.push(
-          makeStandardSTXPostCondition(
-            userAddress,
-            FungibleConditionCode.LessEqual,
-            event.priceMicroStx
-          )
+          Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
         );
       }
       
