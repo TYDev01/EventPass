@@ -78,7 +78,7 @@ export default function EventsPage() {
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold text-foreground">Featured events</h2>
               <p className="text-sm text-muted-foreground">
-                Every listing mirrors the state of the EventPass contract. Purchase seats with confidence knowing supply and ownership enforce on-chain limits.
+                Ongoing and available events.
               </p>
             </div>
             <Button variant="ghost" className="gap-2" asChild>
