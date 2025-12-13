@@ -61,6 +61,10 @@ export const clearPendingEvent = (txId: string) => {
   writeStorage(filtered);
 };
 
+export const clearAllPendingEvents = () => {
+  writeStorage([]);
+};
+
 export const derivePendingEventId = (txId: string) => {
   let hash = 0;
   for (let index = 0; index < txId.length; index += 1) {

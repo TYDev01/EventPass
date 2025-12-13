@@ -4,7 +4,7 @@ import { AppConfig, type AuthOptions } from "@stacks/connect";
 import { UserSession } from "@stacks/auth";
 import type { ConnectNetwork } from "@stacks/connect";
 
-export const TESTNET_CORE_API = "https://stacks-node-api.testnet.stacks.co";
+export const TESTNET_CORE_API = "https://api.testnet.hiro.so";
 export const APP_NAME = "EventPass";
 export const APP_ICON_PATH = "/icon.svg";
 export const APP_MANIFEST_PATH = "/manifest.json";

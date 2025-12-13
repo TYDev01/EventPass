@@ -7,6 +7,7 @@ import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
 import { stringAsciiCV, uintCV } from "@stacks/transactions";
 import { ArrowLeft, Plus, Trash2, Wallet } from "lucide-react";
+import { toast } from "sonner";
 
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -37,32 +38,9 @@ const stacksTestnet = createNetwork({
   client: { baseUrl: TESTNET_CORE_API }
 });
 
-const initialFeedback = {
-  message: "Review your event details before publishing on-chain.",
-  tone: "info" as const
-};
-
-type FeedbackTone = "info" | "success" | "error";
-
-type Feedback = {
-  message: string;
-  tone: FeedbackTone;
-};
-
 type AttributeInput = {
   traitType: string;
   value: string;
-};
-
-const formatFeedbackClasses = (tone: FeedbackTone) => {
-  switch (tone) {
-    case "success":
-      return "border-emerald-400/50 bg-emerald-50 text-emerald-800";
-    case "error":
-      return "border-red-400/60 bg-red-50 text-red-700";
-    default:
-      return "border-primary/30 bg-white/70 text-foreground";
-  }
 };
 
 export default function CreateEventPage() {
@@ -81,15 +59,6 @@ export default function CreateEventPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<Feedback>(() =>
-    contractConfigured
-      ? initialFeedback
-      : {
-          tone: "error",
-          message:
-            "Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS to your deployed contract (e.g. ST2...event-pass)."
-        }
-  );
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
 
   const formatDuration = (millis: number) => {
@@ -153,103 +122,72 @@ export default function CreateEventPage() {
 
   const validateInputs = () => {
     if (!contractConfigured) {
-      setFeedback({
-        tone: "error",
-        message:
-          "Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS to your deployed contract (e.g. ST...event-pass)."
-      });
+      toast.error("Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS to your deployed contract (e.g. ST...event-pass).");
       return false;
     }
 
     if (!address || !userSession) {
-      setFeedback({
-        tone: "info",
-        message: "Connect your Leather wallet to create a new event."
-      });
+      toast.info("Connect your Leather wallet to create a new event.");
       connect();
       return false;
     }
 
     if (!canCreateEventToday(address)) {
       const remaining = millisUntilNextCreation(address);
-      setFeedback({
-        tone: "error",
-        message: `You can create another event in ${formatDuration(remaining)}.`
-      });
+      toast.error(`You can create another event in ${formatDuration(remaining)}.`);
       return false;
     }
 
     if (!title.trim()) {
-      setFeedback({ tone: "error", message: "Event title is required." });
+      toast.error("Event title is required.");
       return false;
     }
 
     if (title.trim().length > MAX_TITLE_LENGTH) {
-      setFeedback({
-        tone: "error",
-        message: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.`
-      });
+      toast.error(`Title must be ${MAX_TITLE_LENGTH} characters or fewer.`);
       return false;
     }
 
     const normalizedDate = date.trim();
     if (!normalizedDate) {
-      setFeedback({ tone: "error", message: "Provide a date or time label for the event." });
+      toast.error("Provide a date or time label for the event.");
       return false;
     }
 
     if (normalizedDate.length > MAX_DATE_LENGTH) {
-      setFeedback({
-        tone: "error",
-        message: `Date label must be ${MAX_DATE_LENGTH} characters or fewer.`
-      });
+      toast.error(`Date label must be ${MAX_DATE_LENGTH} characters or fewer.`);
       return false;
     }
 
     const priceValue = Number(price);
     if (Number.isNaN(priceValue) || priceValue < 0) {
-      setFeedback({ tone: "error", message: "Price must be a positive number." });
+      toast.error("Price must be a positive number.");
       return false;
     }
 
     const seatsValue = Number(totalSeats);
     if (!Number.isInteger(seatsValue) || seatsValue <= 0) {
-      setFeedback({
-        tone: "error",
-        message: "Total seats must be an integer greater than zero."
-      });
+      toast.error("Total seats must be an integer greater than zero.");
       return false;
     }
 
     if (!metadataName.trim()) {
-      setFeedback({
-        tone: "error",
-        message: "Metadata name is required."
-      });
+      toast.error("Metadata name is required.");
       return false;
     }
 
     if (!metadataDescription.trim()) {
-      setFeedback({
-        tone: "error",
-        message: "Metadata description is required."
-      });
+      toast.error("Metadata description is required.");
       return false;
     }
 
     if (!imageFile) {
-      setFeedback({
-        tone: "error",
-        message: "Upload an NFT image smaller than 1MB."
-      });
+      toast.error("Upload an NFT image smaller than 1MB.");
       return false;
     }
 
     if (imageFile.size > MAX_IMAGE_SIZE_BYTES) {
-      setFeedback({
-        tone: "error",
-        message: "The selected image is larger than 1MB. Please choose a smaller file."
-      });
+      toast.error("The selected image is larger than 1MB. Please choose a smaller file.");
       setImageError("Image exceeds 1MB limit.");
       return false;
     }
@@ -272,10 +210,7 @@ export default function CreateEventPage() {
 
     try {
       setIsSubmitting(true);
-      setFeedback({
-        tone: "info",
-        message: "Review and confirm the transaction in your Leather wallet to publish the event."
-      });
+      toast.info("Review and confirm the transaction in your Leather wallet to publish the event.");
 
       const trimmedTitle = title.trim();
       const trimmedDate = date.trim();
@@ -377,10 +312,7 @@ export default function CreateEventPage() {
         network: stacksTestnet,
         onCancel: () => {
           setIsSubmitting(false);
-          setFeedback({
-            tone: "info",
-            message: "Event creation was cancelled in the wallet."
-          });
+          toast.info("Event creation was cancelled in the wallet.");
         },
         onFinish: (payload) => {
           setIsSubmitting(false);
@@ -397,10 +329,7 @@ export default function CreateEventPage() {
             metadataUri
           });
           recordEventCreation(address);
-          setFeedback({
-            tone: "success",
-            message: `Event creation submitted! Track status via tx ${payload.txId}. Your listing will appear once the transaction confirms.`
-          });
+          toast.success(`Event creation submitted! Track status via tx ${payload.txId}. Your listing will appear once the transaction confirms.`);
           resetForm();
           void refreshSession();
         }
@@ -408,13 +337,11 @@ export default function CreateEventPage() {
     } catch (error) {
       console.error("Failed to initiate event creation", error);
       setIsSubmitting(false);
-      setFeedback({
-        tone: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Something went wrong while opening the Leather transaction modal."
-      });
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while opening the Leather transaction modal."
+      );
     }
   };
 
@@ -447,9 +374,6 @@ export default function CreateEventPage() {
                 Define the public metadata and ticket supply for your EventPass experience. You will review and sign the
                 resulting contract call in your Leather wallet.
               </p>
-            </div>
-            <div className={`rounded-2xl border px-4 py-3 text-sm ${formatFeedbackClasses(feedback.tone)}`}>
-              {feedback.message}
             </div>
           </div>
 
@@ -528,7 +452,7 @@ export default function CreateEventPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="metadata-description">NFT description</Label>
+              <Label htmlFor="metadata-description">Event description</Label>
               <textarea
                 id="metadata-description"
                 placeholder="Describe the experience your attendees unlock."

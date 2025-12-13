@@ -19,6 +19,7 @@ import {
 } from "@/lib/pending-events";
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
+import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
 
 type EventStats = {
   active: number;
@@ -110,10 +111,10 @@ const mapPendingToDisplayEvents = (records: PendingEventRecord[]): EventPassEven
       };
     });
 
-const reconcilePendingRecords = (
+const reconcilePendingRecords = async (
   onChainEvents: OnChainEvent[],
   pendingRecords: PendingEventRecord[]
-): PendingEventRecord[] => {
+): Promise<PendingEventRecord[]> => {
   if (pendingRecords.length === 0) {
     return pendingRecords;
   }
@@ -128,18 +129,70 @@ const reconcilePendingRecords = (
     )
   );
 
-  return pendingRecords.filter((pending) => {
-    if (pending.expectedEventId && confirmedIds.has(pending.expectedEventId)) {
-      return false;
-    }
-    if (!pending.creator) {
+  console.log("🔍 Reconciling pending events:");
+  console.log("  On-chain events:", onChainEvents.length);
+  console.log("  Pending records:", pendingRecords.length);
+  console.log("  Confirmed IDs:", Array.from(confirmedIds));
+  
+  if (onChainEvents.length > 0) {
+    console.log("  On-chain event details:", onChainEvents.map(e => ({
+      id: e.id,
+      title: e.title,
+      creator: e.creator,
+      price: e.priceMicroStx.toString(),
+      metadataUri: e.metadataUri
+    })));
+  }
+
+  // Check transaction status for each pending event
+  const pendingWithStatus = await Promise.all(
+    pendingRecords.map(async (pending) => {
+      console.log(`  Checking transaction: ${pending.txId} for event "${pending.title}"`);
+      const txStatus = await reconcilePendingWithTransaction(pending.txId);
+      console.log(`  Transaction ${pending.txId} status:`, txStatus);
+      return { pending, txStatus };
+    })
+  );
+
+  return pendingWithStatus
+    .filter(({ pending, txStatus }) => {
+      // Remove if transaction check says to remove
+      if (txStatus.shouldRemove) {
+        console.log(`✅ Removing pending event (transaction confirmed/failed): ${pending.title} (txId: ${pending.txId})`);
+        return false;
+      }
+
+      // Check by expected ID
+      if (pending.expectedEventId && confirmedIds.has(pending.expectedEventId)) {
+        console.log(`✅ Removing pending event (matched by ID): ${pending.title} (ID: ${pending.expectedEventId})`);
+        return false;
+      }
+
+      if (!pending.creator) {
+        return true;
+      }
+
+      // Check by signature
+      const signature = `${pending.title.toLowerCase()}|${pending.date.toLowerCase()}|${pending.creator}|${pending.priceMicroStx}|${pending.totalSeats}|${(
+        pending.metadataUri || ""
+      ).toLowerCase()}`;
+      const isConfirmed = confirmedSignatures.has(signature);
+      
+      if (isConfirmed) {
+        console.log(`✅ Removing pending event (matched by signature): ${pending.title}`);
+        return false;
+      }
+
+      console.log(`⏳ Keeping pending event: ${pending.title}`, {
+        expectedId: pending.expectedEventId,
+        txId: pending.txId,
+        pendingSignature: signature,
+        onChainSignatures: Array.from(confirmedSignatures)
+      });
+      
       return true;
-    }
-    const signature = `${pending.title.toLowerCase()}|${pending.date.toLowerCase()}|${pending.creator}|${pending.priceMicroStx}|${pending.totalSeats}|${(
-      pending.metadataUri || ""
-    ).toLowerCase()}`;
-    return !confirmedSignatures.has(signature);
-  });
+    })
+    .map(({ pending }) => pending);
 };
 
 export type EventCatalogState = {
@@ -202,21 +255,34 @@ export function useEventCatalog(): EventCatalogState {
       }
 
       try {
+        console.log("📡 Fetching on-chain events...");
         const onChainEvents = await fetchOnChainEvents(address);
+        console.log(`📊 Found ${onChainEvents.length} on-chain events`);
+        
         if (cancelled) {
           return;
         }
-        const reconciledPending = reconcilePendingRecords(onChainEvents, initialPending);
+        
+        let reconciledPending = initialPending;
+        try {
+          reconciledPending = await reconcilePendingRecords(onChainEvents, initialPending);
+          console.log(`✨ After reconciliation: ${reconciledPending.length} pending events remain`);
+        } catch (reconcileError) {
+          console.warn("⚠️ Failed to reconcile pending events, keeping original:", reconcileError);
+          reconciledPending = initialPending;
+        }
+        
         if (!cancelled) {
           setOnChainEvents(mapOnChainToDisplay(onChainEvents));
           setLoadError(null);
           if (reconciledPending.length !== initialPending.length) {
+            console.log("💾 Updating localStorage with reconciled pending events");
             persistPendingEvents(reconciledPending);
           }
           setPendingRecords(reconciledPending);
         }
       } catch (error) {
-        console.error("Unable to load on-chain events", error);
+        console.error("❌ Unable to load on-chain events - full error:", error);
         if (!cancelled) {
           setOnChainEvents(sampleEvents);
           setLoadError("Unable to load on-chain events. Displaying sample showcases instead.");

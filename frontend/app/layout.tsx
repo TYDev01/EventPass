@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Urbanist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { StacksProvider } from "@/components/StacksProvider";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const urbanist = Urbanist({
@@ -25,6 +26,7 @@ export default function RootLayout({
     <html lang="en" className={urbanist.variable}>
       <body className={cn("min-h-screen bg-hero-accent text-foreground", urbanist.className)}>
         <StacksProvider>{children}</StacksProvider>
+        <Toaster />
       </body>
     </html>
   );
