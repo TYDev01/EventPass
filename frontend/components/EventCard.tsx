@@ -6,8 +6,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
-import { uintCV, PostConditionMode, makeStandardSTXPostCondition, FungibleConditionCode } from "@stacks/transactions";
+import { 
+  uintCV, 
+  PostConditionMode, 
+  FungibleConditionCode,
+  Pc
+} from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,11 +82,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
       if (event.priceMicroStx && event.priceMicroStx > 0n) {
         const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
         postConditions.push(
-          makeStandardSTXPostCondition(
-            userAddress,
-            FungibleConditionCode.LessEqual,
-            event.priceMicroStx
-          )
+          Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
         );
       }
       
@@ -96,13 +98,31 @@ export function EventCard({ event }: { event: EventPassEvent }) {
         network,
         onCancel: () => {
           setIsPurchasing(false);
+          toast.info("Purchase cancelled");
         },
-        onFinish: () => {
+        onFinish: (data) => {
           setIsPurchasing(false);
+          if (data.txId) {
+            toast.success(
+              `Ticket purchase submitted! Transaction ID: ${data.txId.slice(0, 8)}...`,
+              {
+                description: "Your ticket will be minted once the transaction confirms.",
+                duration: 6000
+              }
+            );
+          } else {
+            toast.success("Ticket purchase submitted!");
+          }
         }
       });
     } catch (error) {
       console.error("Unable to start ticket purchase", error);
+      toast.error(
+        "Failed to purchase ticket",
+        {
+          description: error instanceof Error ? error.message : "Please try again"
+        }
+      );
       setIsPurchasing(false);
     }
   }, [
