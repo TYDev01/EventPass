@@ -4,6 +4,7 @@ export type EventPassEvent = {
   date: string;
   location: string;
   price: string;
+  priceMicroStx?: bigint;
   status: "Active" | "Ended" | "Canceled" | "Pending";
   seats: number;
   sold: number;
