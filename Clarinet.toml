@@ -6,7 +6,7 @@ telemetry = true
 cache_dir = "./.cache"
 requirements = []
 
-[contracts.event-pass]
+[contracts.event-pass-v2]
 path = "contracts/event-pass.clar"
 clarity_version = 1
 epoch = "2.05"

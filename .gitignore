@@ -13,3 +13,9 @@ costs-reports.json
 node_modules
 deployments
 event.md
+todo
+.env
+frontend/.next
+frontend/.env
+.env.local
+frontend/.env.local

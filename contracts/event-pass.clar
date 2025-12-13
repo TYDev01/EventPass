@@ -17,14 +17,25 @@
 
 (define-map events ;; Storage map that keeps the core metadata for each event keyed by its identifier.
   {event-id: uint} ;; Map key specification: the event identifier.
-  {creator: principal, title: (string-ascii 64), date: (string-ascii 32), price: uint, total-seats: uint, sold-seats: uint, status: uint}) ;; Map value specification describing who created the event, its ticketing details, and lifecycle status.
+  {creator: principal, title: (string-ascii 64), date: (string-ascii 32), price: uint, total-seats: uint, sold-seats: uint, status: uint, metadata-uri: (string-ascii 256)}) ;; Map value specification describing who created the event, its ticketing details, lifecycle status, and metadata pointer.
 
 (define-map tickets ;; Storage map that keeps track of each sold seat per event.
   {event-id: uint, seat: uint} ;; Map key specification combining the event identifier and seat number.
   {owner: principal}) ;; Map value specification storing the principal that owns this seat.
 
+(define-map token-metadata ;; Metadata URI map keyed by token identifier so wallets can resolve SIP-016 metadata.
+  {event-id: uint, seat: uint}
+  {uri: (string-ascii 256)})
+
+(define-data-var contract-metadata-uri (optional (string-ascii 256)) none) ;; Optional contract-level metadata URI advertised through SIP-016.
+(define-data-var deployer principal tx-sender) ;; Store the contract deployer as the owner.
+
 (define-non-fungible-token ticket ;; Declaration of the NFT collection used to represent tickets.
   {event-id: uint, seat: uint}) ;; Each NFT token identifier is the pair of event identifier and seat number.
+
+;; function contract-owner: returns the principal that deployed this contract.
+(define-read-only (contract-owner)
+  (var-get deployer))
 
 ;; function get-next-event-id: exposes the identifier that will be used for the next event registration.
 (define-read-only (get-next-event-id) ;; Read-only helper that reveals the next event identifier that will be assigned.
@@ -41,8 +52,8 @@
     (ok {event-id: event-id, seat: seat, owner: (get owner ticket-record)}) ;; Return the metadata as a response containing event id, seat, and owner.
     ERR-NO-TICKET)) ;; If the ticket does not exist, propagate an error indicating that no ticket was found.
 
-;; function create-event: lets any caller register a new event with pricing and capacity information.
-(define-public (create-event (title (string-ascii 64)) (date (string-ascii 32)) (price uint) (total-seats uint)) ;; Public function that lets any principal register a new event.
+;; function create-event: lets any caller register a new event with pricing, capacity, and metadata information.
+(define-public (create-event (title (string-ascii 64)) (date (string-ascii 32)) (price uint) (total-seats uint) (metadata-uri (string-ascii 256))) ;; Public function that lets any principal register a new event.
   (begin ;; Sequence the event creation steps.
     (asserts! (> total-seats u0) ERR-ZERO-SEATS) ;; Ensure the event offers at least one seat before continuing.
     (let ((event-id (var-get next-event-id))) ;; Grab the current counter value so we can use it as the new event identifier.
@@ -55,7 +66,8 @@
            price: price, ;; Record the ticket price in micro-STX units.
            total-seats: total-seats, ;; Record the total number of seats for sale.
            sold-seats: u0, ;; Initialize the sold tickets counter to zero.
-           status: STATUS-ACTIVE}) ;; Mark the event as active so ticket sales are permitted.
+           status: STATUS-ACTIVE, ;; Mark the event as active so ticket sales are permitted.
+           metadata-uri: metadata-uri}) ;; Persist the metadata pointer used to render ticket NFTs.
         (var-set next-event-id (+ event-id u1)) ;; Increment the counter so the next event receives a new identifier.
         (ok event-id))))) ;; Return the newly assigned event identifier wrapped in an ok response.
 
@@ -83,7 +95,11 @@
            price: (get price event-data), ;; Preserve the ticket price.
            total-seats: (get total-seats event-data), ;; Preserve the total seat count.
            sold-seats: updated-sold, ;; Replace the sold tickets counter with the new value.
-           status: (get status event-data)}) ;; Keep the event status unchanged during the sale.
+           status: (get status event-data), ;; Keep the event status unchanged during the sale.
+           metadata-uri: (get metadata-uri event-data)}) ;; Preserve the metadata pointer when updating the record.
+        (map-set token-metadata ;; Store the metadata URI for this minted ticket to satisfy SIP-016 lookups.
+          {event-id: event-id, seat: seat}
+          {uri: (get metadata-uri event-data)})
         (try! (nft-mint? ticket ;; Mint the NFT representation of the ticket.
                          {event-id: event-id, ;; Use the event identifier as part of the NFT token identifier.
                           seat: seat} ;; Use the seat number as the second component of the NFT token identifier.
@@ -104,7 +120,8 @@
          price: (get price event-data), ;; Preserve ticket price.
          total-seats: (get total-seats event-data), ;; Preserve capacity.
          sold-seats: (get sold-seats event-data), ;; Preserve sales count.
-         status: STATUS-CANCELED}) ;; Apply the canceled status code.
+         status: STATUS-CANCELED, ;; Apply the canceled status code.
+         metadata-uri: (get metadata-uri event-data)}) ;; Preserve the metadata pointer when updating status.
       (ok STATUS-CANCELED)))) ;; Return the new status code to the caller.
 
 ;; function end-event: allows the event creator to mark an event as ended once it is complete.
@@ -121,5 +138,23 @@
          price: (get price event-data), ;; Preserve ticket price.
          total-seats: (get total-seats event-data), ;; Preserve capacity.
          sold-seats: (get sold-seats event-data), ;; Preserve sales count.
-         status: STATUS-ENDED}) ;; Apply the ended status code.
+         status: STATUS-ENDED, ;; Apply the ended status code.
+         metadata-uri: (get metadata-uri event-data)}) ;; Preserve the metadata pointer when ending an event.
       (ok STATUS-ENDED)))) ;; Return the new status code to the caller.
+
+;; function set-contract-metadata: allows the contract deployer to advertise a metadata document for the entire collection.
+(define-public (set-contract-metadata (uri (optional (string-ascii 256))))
+  (begin
+    (asserts! (is-eq tx-sender (contract-owner)) ERR-NOT-CREATOR) ;; Restrict updates to the contract deployer.
+    (var-set contract-metadata-uri uri) ;; Persist the provided optional URI.
+    (ok uri))) ;; Return the stored value for convenience.
+
+;; function get-contract-uri: SIP-016 helper exposing the contract metadata pointer.
+(define-read-only (get-contract-uri)
+  (ok (var-get contract-metadata-uri)))
+
+;; function get-token-uri: SIP-016 helper that surfaces the metadata URI for an individual ticket NFT.
+(define-read-only (get-token-uri (token-id {event-id: uint, seat: uint}))
+  (match (map-get? token-metadata token-id)
+    token-record (ok (some (get uri token-record))) ;; Return the stored URI when available.
+    (ok none))) ;; Unminted seats do not expose metadata yet.
