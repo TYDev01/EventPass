@@ -11,7 +11,7 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/events", label: "Events" },
   { href: "/my-tickets", label: "My Tickets" },
-  { href: "/create", label: "Create Event" }
+  { href: "/create", label: "Organizer" }
 ];
 
 export function Header() {
@@ -34,7 +34,11 @@ export function Header() {
             <Link
               key={link.href}
               href={link.href}
-              className="transition-colors hover:text-primary"
+              className={
+                link.label === "Organizer"
+                  ? "rounded-full font-bold border border-primary/30 bg-primary/5 px-4 py-2 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+                  : "transition-colors hover:text-primary"
+              }
             >
               {link.label}
             </Link>

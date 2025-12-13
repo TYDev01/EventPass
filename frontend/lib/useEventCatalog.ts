@@ -20,6 +20,7 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
 import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
+import { getImageFromMetadata } from "@/lib/metadata-cache";
 
 type EventStats = {
   active: number;
@@ -27,29 +28,35 @@ type EventStats = {
   capacity: number;
 };
 
-const mapOnChainToDisplay = (events: OnChainEvent[]): EventPassEvent[] =>
-  events.map((event) => {
-    const image = getEventImageByIndex(event.id);
-    const creatorLabel = summarizePrincipal(event.creator);
-    const priceLabel = formatPriceFromMicroStx(event.priceMicroStx);
+const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEvent[]> => {
+  const mappedEvents = await Promise.all(
+    events.map(async (event) => {
+      const fallbackImage = getEventImageByIndex(event.id);
+      // Fetch the actual image from IPFS metadata
+      const image = await getImageFromMetadata(event.metadataUri, fallbackImage);
+      const creatorLabel = summarizePrincipal(event.creator);
+      const priceLabel = formatPriceFromMicroStx(event.priceMicroStx);
 
-    return {
-      id: event.id,
-      title: event.title,
-      date: event.date,
-      price: priceLabel,
-      priceMicroStx: event.priceMicroStx,
-      status: event.status,
-      seats: event.totalSeats,
-      sold: event.soldSeats,
-      image,
-      description: `Minted by ${creatorLabel} with EventPass smart contracts.`,
-      location: "EventPass • On-chain drop",
-      creator: event.creator,
-      isOnChain: true,
-      metadataUri: event.metadataUri
-    };
-  });
+      return {
+        id: event.id,
+        title: event.title,
+        date: event.date,
+        price: priceLabel,
+        priceMicroStx: event.priceMicroStx,
+        status: event.status,
+        seats: event.totalSeats,
+        sold: event.soldSeats,
+        image,
+        description: `Minted by ${creatorLabel} with EventPass smart contracts.`,
+        location: "EventPass • On-chain drop",
+        creator: event.creator,
+        isOnChain: true,
+        metadataUri: event.metadataUri
+      };
+    })
+  );
+  return mappedEvents;
+};
 
 const computeStats = (events: EventPassEvent[]): EventStats =>
   events.reduce<EventStats>(
@@ -274,7 +281,8 @@ export function useEventCatalog(): EventCatalogState {
         }
         
         if (!cancelled) {
-          setOnChainEvents(mapOnChainToDisplay(onChainEvents));
+          const mappedEvents = await mapOnChainToDisplay(onChainEvents);
+          setOnChainEvents(mappedEvents);
           setLoadError(null);
           if (reconciledPending.length !== initialPending.length) {
             console.log("💾 Updating localStorage with reconciled pending events");
