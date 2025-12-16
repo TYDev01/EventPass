@@ -41,7 +41,9 @@ export function TransferTicketDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
 
-  const transferFee = originalPrice * 0.05; // 5% transfer fee
+  // Convert originalPrice to BigInt if it isn't already, then calculate 5% fee
+  const priceAsBigInt = typeof originalPrice === 'bigint' ? originalPrice : BigInt(originalPrice);
+  const transferFee = Number((priceAsBigInt * 5n) / 100n);
 
   const handleTransfer = async () => {
     if (!userSession) {
