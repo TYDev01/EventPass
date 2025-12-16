@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Urbanist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { StacksProvider } from "@/components/StacksProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -23,10 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={urbanist.variable}>
+    <html lang="en" className={urbanist.variable} suppressHydrationWarning>
       <body className={cn("min-h-screen bg-hero-accent text-foreground", urbanist.className)}>
-        <StacksProvider>{children}</StacksProvider>
-        <Toaster />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <StacksProvider>{children}</StacksProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

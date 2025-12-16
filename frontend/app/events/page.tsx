@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, RefreshCcw } from "lucide-react";
 
 import { Header } from "@/components/Header";
 import { EventCard } from "@/components/EventCard";
+import { EventCardSkeleton } from "@/components/EventCardSkeleton";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useEventCatalog } from "@/lib/useEventCatalog";
@@ -97,9 +98,14 @@ export default function EventsPage() {
 
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
             {isLoading ? (
-              <div className="col-span-full rounded-2xl border border-dashed border-primary/40 bg-white/60 px-6 py-12 text-center text-sm text-muted-foreground">
-                Loading events from the EventPass contract...
-              </div>
+              <>
+                <EventCardSkeleton />
+                <EventCardSkeleton />
+                <EventCardSkeleton />
+                <EventCardSkeleton />
+                <EventCardSkeleton />
+                <EventCardSkeleton />
+              </>
             ) : showEmptyState ? (
               <div className="col-span-full rounded-2xl border border-dashed border-primary/40 bg-white/60 px-6 py-12 text-center">
                 <p className="text-sm text-muted-foreground">
