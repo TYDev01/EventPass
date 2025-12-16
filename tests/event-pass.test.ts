@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Cl, ClarityType, ClarityValue, ResponseOkCV, UIntCV, SomeCV, TupleCV } from "@stacks/transactions";
 
 const accounts = simnet.getAccounts();
+const deployer = accounts.get("deployer")!;
 const creator = accounts.get("wallet_1")!;
 const buyer = accounts.get("wallet_2")!;
 const otherBuyer = accounts.get("wallet_3")!;
@@ -249,7 +250,7 @@ describe("event-pass contract", () => {
       "event-pass",
       "set-contract-metadata",
       [Cl.some(Cl.stringAscii(metadataUri))],
-      creator,
+      deployer,
     );
 
     expect(setMetadata.result).toBeOk(Cl.some(Cl.stringAscii(metadataUri)));
@@ -258,7 +259,7 @@ describe("event-pass contract", () => {
       "event-pass",
       "get-contract-uri",
       [],
-      creator,
+      deployer,
     );
 
     expect(contractUriRaw).toBeOk(Cl.some(Cl.stringAscii(metadataUri)));
