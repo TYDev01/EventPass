@@ -19,3 +19,4 @@ frontend/.next
 frontend/.env
 .env.local
 frontend/.env.local
+IMPROVEMENTS.md
