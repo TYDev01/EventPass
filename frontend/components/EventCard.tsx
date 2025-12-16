@@ -151,6 +151,13 @@ export function EventCard({ event }: { event: EventPassEvent }) {
       <Card className="overflow-hidden">
         <div className="relative h-48 w-full overflow-hidden">
           <Image src={event.image} alt={`${event.title} banner`} fill className="object-cover" />
+          {isSoldOut && (
+            <div className="absolute left-4 top-4">
+              <span className="inline-block rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg">
+                Sold Out
+              </span>
+            </div>
+          )}
           <div className="absolute right-4 top-4 flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-foreground/70">
             <Ticket className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             {event.sold}/{event.seats} sold

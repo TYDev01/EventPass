@@ -6,6 +6,7 @@ import { Menu, Ticket } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -45,6 +46,7 @@ export function Header() {
           ))}
         </div>
         <div className="ml-4 flex items-center gap-3">
+          <ThemeToggle />
           <ConnectWalletButton />
           <Button size="icon" variant="outline" className="md:hidden">
             <span className="sr-only">Open navigation</span>
