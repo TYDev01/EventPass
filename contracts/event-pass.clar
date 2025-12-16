@@ -8,10 +8,35 @@
 (define-constant ERR-EVENT-INACTIVE (err u106)) ;; Error returned when a ticket action is attempted on an inactive event.
 (define-constant ERR-NOT-CREATOR (err u107)) ;; Error returned when a non-creator attempts to manage an event.
 (define-constant ERR-STATUS-TRANSITION (err u108)) ;; Error returned when an invalid status transition is requested.
+(define-constant ERR-INVALID-INPUT (err u109)) ;; Error returned when input validation fails for strings or other parameters.
+(define-constant ERR-INVALID-PRICE (err u110)) ;; Error returned when price parameter is invalid or exceeds reasonable bounds.
 
 (define-constant STATUS-ACTIVE u0) ;; Status code meaning the event is active and accepting ticket purchases.
 (define-constant STATUS-CANCELED u1) ;; Status code meaning the event has been canceled by its creator.
 (define-constant STATUS-ENDED u2) ;; Status code meaning the event has ended and should no longer sell tickets.
+
+(define-constant MAX-PRICE u1000000000000) ;; Maximum price cap: 1 million STX in micro-STX units to prevent overflow issues.
+(define-constant MAX-SEATS u10000) ;; Maximum seats per event: 10,000 to prevent excessive gas costs and ensure reasonable event sizes.
+
+;; Private helper function to validate string input is not empty.
+(define-private (is-valid-string (str (string-ascii 64)))
+  (> (len str) u0))
+
+;; Private helper function to validate date string input is not empty.
+(define-private (is-valid-date (date (string-ascii 32)))
+  (> (len date) u0))
+
+;; Private helper function to validate metadata URI is not empty.
+(define-private (is-valid-uri (uri (string-ascii 256)))
+  (> (len uri) u0))
+
+;; Private helper function to validate price is within reasonable bounds.
+(define-private (is-valid-price (price uint))
+  (<= price MAX-PRICE))
+
+;; Private helper function to validate total seats is within reasonable bounds.
+(define-private (is-valid-seats (seats uint))
+  (and (> seats u0) (<= seats MAX-SEATS)))
 
 (define-data-var next-event-id uint u1) ;; Persistent counter that assigns incremental identifiers to new events starting at 1.
 
@@ -55,7 +80,12 @@
 ;; function create-event: lets any caller register a new event with pricing, capacity, and metadata information.
 (define-public (create-event (title (string-ascii 64)) (date (string-ascii 32)) (price uint) (total-seats uint) (metadata-uri (string-ascii 256))) ;; Public function that lets any principal register a new event.
   (begin ;; Sequence the event creation steps.
-    (asserts! (> total-seats u0) ERR-ZERO-SEATS) ;; Ensure the event offers at least one seat before continuing.
+    ;; Input validation checks
+    (asserts! (is-valid-string title) ERR-INVALID-INPUT) ;; Ensure title is not empty.
+    (asserts! (is-valid-date date) ERR-INVALID-INPUT) ;; Ensure date is not empty.
+    (asserts! (is-valid-uri metadata-uri) ERR-INVALID-INPUT) ;; Ensure metadata URI is not empty.
+    (asserts! (is-valid-price price) ERR-INVALID-PRICE) ;; Ensure price is valid and within bounds.
+    (asserts! (is-valid-seats total-seats) ERR-ZERO-SEATS) ;; Ensure seats are valid and within bounds.
     (let ((event-id (var-get next-event-id))) ;; Grab the current counter value so we can use it as the new event identifier.
       (begin ;; Sequence the state changes required to register the event.
         (map-set events ;; Persist the new event metadata into storage.
