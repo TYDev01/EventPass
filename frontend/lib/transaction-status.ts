@@ -32,7 +32,7 @@ export async function checkTransactionStatus(txId: string): Promise<TransactionS
       const match = data.tx_result.repr.match(/\(ok u(\d+)\)/);
       if (match && match[1]) {
         eventId = parseInt(match[1], 10);
-        console.log(`✅ Transaction ${txId} confirmed with event ID: ${eventId}`);
+        console.log(`Transaction ${txId} confirmed with event ID: ${eventId}`);
       }
     }
 

@@ -10,6 +10,8 @@
 (define-constant ERR-STATUS-TRANSITION (err u108)) ;; Error returned when an invalid status transition is requested.
 (define-constant ERR-INVALID-INPUT (err u109)) ;; Error returned when input validation fails for strings or other parameters.
 (define-constant ERR-INVALID-PRICE (err u110)) ;; Error returned when price parameter is invalid or exceeds reasonable bounds.
+(define-constant ERR-NOT-TICKET-OWNER (err u111)) ;; Error returned when a non-owner attempts to transfer a ticket.
+(define-constant ERR-TRANSFER-TO-SELF (err u112)) ;; Error returned when attempting to transfer a ticket to yourself.
 
 (define-constant STATUS-ACTIVE u0) ;; Status code meaning the event is active and accepting ticket purchases.
 (define-constant STATUS-CANCELED u1) ;; Status code meaning the event has been canceled by its creator.
@@ -188,3 +190,33 @@
   (match (map-get? token-metadata token-id)
     token-record (ok (some (get uri token-record))) ;; Return the stored URI when available.
     (ok none))) ;; Unminted seats do not expose metadata yet.
+
+;; function transfer-ticket: allows a ticket owner to transfer their ticket to another user.
+(define-public (transfer-ticket (event-id uint) (seat uint) (recipient principal))
+  (let (
+    (event-data (unwrap! (map-get? events {event-id: event-id}) ERR-NO-SUCH-EVENT))
+    (ticket-data (unwrap! (map-get? tickets {event-id: event-id, seat: seat}) ERR-NO-TICKET))
+    (transfer-fee (/ (get price event-data) u20))) ;; 5% transfer fee to event creator
+    (begin
+      ;; Validate transfer is allowed
+      (asserts! (is-eq tx-sender (get owner ticket-data)) ERR-NOT-TICKET-OWNER) ;; Only ticket owner can transfer
+      (asserts! (not (is-eq tx-sender recipient)) ERR-TRANSFER-TO-SELF) ;; Cannot transfer to yourself
+      (asserts! (not (is-eq (get status event-data) STATUS-ENDED)) ERR-EVENT-INACTIVE) ;; Cannot transfer after event ended
+      
+      ;; Charge transfer fee (5% of original ticket price to event creator)
+      (if (> transfer-fee u0)
+        (try! (stx-transfer? transfer-fee tx-sender (get creator event-data)))
+        true)
+      
+      ;; Update ticket ownership
+      (map-set tickets
+        {event-id: event-id, seat: seat}
+        {owner: recipient})
+      
+      ;; Transfer the NFT
+      (try! (nft-transfer? ticket
+                          {event-id: event-id, seat: seat}
+                          tx-sender
+                          recipient))
+      
+      (ok {event-id: event-id, seat: seat, from: tx-sender, to: recipient, fee: transfer-fee}))))
