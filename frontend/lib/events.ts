@@ -340,9 +340,12 @@ export const fetchNextEventId = async (senderAddress?: string | null): Promise<b
   }
 };
 
-export const formatPriceFromMicroStx = (value: bigint): string => {
-  const whole = value / MICROSTX;
-  const fraction = value % MICROSTX;
+export const formatPriceFromMicroStx = (value: bigint | number): string => {
+  // Convert to BigInt if it's a number
+  const valueBigInt = typeof value === 'bigint' ? value : BigInt(Math.floor(value));
+  
+  const whole = valueBigInt / MICROSTX;
+  const fraction = valueBigInt % MICROSTX;
   if (fraction === 0n) {
     return `${whole.toString()} STX`;
   }

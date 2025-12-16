@@ -10,6 +10,10 @@
 (define-constant ERR-STATUS-TRANSITION (err u108)) ;; Error returned when an invalid status transition is requested.
 (define-constant ERR-INVALID-INPUT (err u109)) ;; Error returned when input validation fails for strings or other parameters.
 (define-constant ERR-INVALID-PRICE (err u110)) ;; Error returned when price parameter is invalid or exceeds reasonable bounds.
+(define-constant ERR-NOT-TICKET-OWNER (err u111)) ;; Error returned when a non-owner attempts to transfer a ticket.
+(define-constant ERR-TRANSFER-TO-SELF (err u112)) ;; Error returned when attempting to transfer a ticket to yourself.
+(define-constant ERR-ALREADY-REFUNDED (err u113)) ;; Error returned when attempting to refund a ticket that was already refunded.
+(define-constant ERR-EVENT-NOT-CANCELED (err u114)) ;; Error returned when attempting to refund a ticket for a non-canceled event.
 
 (define-constant STATUS-ACTIVE u0) ;; Status code meaning the event is active and accepting ticket purchases.
 (define-constant STATUS-CANCELED u1) ;; Status code meaning the event has been canceled by its creator.
@@ -46,7 +50,7 @@
 
 (define-map tickets ;; Storage map that keeps track of each sold seat per event.
   {event-id: uint, seat: uint} ;; Map key specification combining the event identifier and seat number.
-  {owner: principal}) ;; Map value specification storing the principal that owns this seat.
+  {owner: principal, refunded: bool}) ;; Map value specification storing the principal that owns this seat and refund status.
 
 (define-map token-metadata ;; Metadata URI map keyed by token identifier so wallets can resolve SIP-016 metadata.
   {event-id: uint, seat: uint}
@@ -74,7 +78,7 @@
 (define-read-only (get-ticket-metadata (event-id uint) (seat uint)) ;; Read-only helper that returns the metadata tuple for a given ticket.
   (match (map-get? tickets {event-id: event-id, seat: seat}) ;; Attempt to find the ticket ownership record for the supplied event and seat.
     ticket-record ;; When the lookup succeeds, bind the ticket record to the name ticket-record.
-    (ok {event-id: event-id, seat: seat, owner: (get owner ticket-record)}) ;; Return the metadata as a response containing event id, seat, and owner.
+    (ok {event-id: event-id, seat: seat, owner: (get owner ticket-record), refunded: (get refunded ticket-record)}) ;; Return the metadata as a response containing event id, seat, owner, and refund status.
     ERR-NO-TICKET)) ;; If the ticket does not exist, propagate an error indicating that no ticket was found.
 
 ;; function create-event: lets any caller register a new event with pricing, capacity, and metadata information.
@@ -116,7 +120,7 @@
         (map-set tickets ;; Record the new ticket ownership entry.
           {event-id: event-id, ;; Use the event identifier as part of the composite key.
            seat: seat} ;; Use the seat number as the second part of the composite key.
-          {owner: tx-sender}) ;; Store the buyer principal as the owner of this seat.
+          {owner: tx-sender, refunded: false}) ;; Store the buyer principal as the owner of this seat and set refunded to false.
         (map-set events ;; Update the event metadata to reflect the incremented sold count.
           {event-id: event-id} ;; Target the existing event record using its identifier.
           {creator: (get creator event-data), ;; Preserve the event creator's principal.
@@ -188,3 +192,70 @@
   (match (map-get? token-metadata token-id)
     token-record (ok (some (get uri token-record))) ;; Return the stored URI when available.
     (ok none))) ;; Unminted seats do not expose metadata yet.
+
+;; function transfer-ticket: allows a ticket owner to transfer their ticket to another user.
+(define-public (transfer-ticket (event-id uint) (seat uint) (recipient principal))
+  (let (
+    (event-data (unwrap! (map-get? events {event-id: event-id}) ERR-NO-SUCH-EVENT))
+    (ticket-data (unwrap! (map-get? tickets {event-id: event-id, seat: seat}) ERR-NO-TICKET))
+    (transfer-fee (/ (get price event-data) u20))) ;; 5% transfer fee to event creator
+    (begin
+      ;; Validate transfer is allowed
+      (asserts! (is-eq tx-sender (get owner ticket-data)) ERR-NOT-TICKET-OWNER) ;; Only ticket owner can transfer
+      (asserts! (not (is-eq tx-sender recipient)) ERR-TRANSFER-TO-SELF) ;; Cannot transfer to yourself
+      (asserts! (not (is-eq (get status event-data) STATUS-ENDED)) ERR-EVENT-INACTIVE) ;; Cannot transfer after event ended
+      
+      ;; Charge transfer fee (5% of original ticket price to event creator)
+      (if (> transfer-fee u0)
+        (try! (stx-transfer? transfer-fee tx-sender (get creator event-data)))
+        true)
+      
+      ;; Update ticket ownership
+      (map-set tickets
+        {event-id: event-id, seat: seat}
+        {owner: recipient, refunded: (get refunded ticket-data)})
+      
+      ;; Transfer the NFT
+      (try! (nft-transfer? ticket
+                          {event-id: event-id, seat: seat}
+                          tx-sender
+                          recipient))
+      
+      (ok {event-id: event-id, seat: seat, from: tx-sender, to: recipient, fee: transfer-fee}))))
+
+;; function claim-refund: allows ticket holders to claim a refund for canceled events (creator pays).
+(define-public (claim-refund (event-id uint) (seat uint))
+  (let (
+    (event-data (unwrap! (map-get? events {event-id: event-id}) ERR-NO-SUCH-EVENT))
+    (ticket-data (unwrap! (map-get? tickets {event-id: event-id, seat: seat}) ERR-NO-TICKET)))
+    (begin
+      ;; Validate refund is allowed
+      (asserts! (is-eq tx-sender (get owner ticket-data)) ERR-NOT-TICKET-OWNER) ;; Only ticket owner can claim refund
+      (asserts! (is-eq (get status event-data) STATUS-CANCELED) ERR-EVENT-NOT-CANCELED) ;; Event must be canceled
+      (asserts! (not (get refunded ticket-data)) ERR-ALREADY-REFUNDED) ;; Cannot refund twice
+      
+      ;; Mark ticket as refunded first
+      (map-set tickets
+        {event-id: event-id, seat: seat}
+        {owner: tx-sender, refunded: true})
+      
+      ;; Burn the NFT since it's been refunded
+      (try! (nft-burn? ticket {event-id: event-id, seat: seat} tx-sender))
+      
+      (ok {event-id: event-id, seat: seat, refund-amount: (get price event-data)}))))
+
+;; function process-refund: allows event creator to process refund by sending STX to ticket holder.
+(define-public (process-refund (event-id uint) (seat uint))
+  (let (
+    (event-data (unwrap! (map-get? events {event-id: event-id}) ERR-NO-SUCH-EVENT))
+    (ticket-data (unwrap! (map-get? tickets {event-id: event-id, seat: seat}) ERR-NO-TICKET)))
+    (begin
+      ;; Validate refund processing is allowed
+      (asserts! (is-eq tx-sender (get creator event-data)) ERR-NOT-CREATOR) ;; Only creator can process refund
+      (asserts! (is-eq (get status event-data) STATUS-CANCELED) ERR-EVENT-NOT-CANCELED) ;; Event must be canceled
+      (asserts! (get refunded ticket-data) ERR-NO-TICKET) ;; Ticket must be marked as refunded
+      
+      ;; Transfer refund amount from creator to ticket holder
+      (try! (stx-transfer? (get price event-data) tx-sender (get owner ticket-data)))
+      
+      (ok {event-id: event-id, seat: seat, refunded-to: (get owner ticket-data), amount: (get price event-data)}))))

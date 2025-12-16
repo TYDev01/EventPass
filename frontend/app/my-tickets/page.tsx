@@ -12,6 +12,7 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EventImage } from "@/components/EventImage";
+import { TransferTicketDialog } from "@/components/TransferTicketDialog";
 import { useStacks } from "@/components/StacksProvider";
 import { TESTNET_CORE_API, getContractParts } from "@/lib/stacks";
 import { fetchOnChainEvents, formatPriceFromMicroStx } from "@/lib/events";
@@ -249,7 +250,14 @@ export default function MyTicketsPage() {
                         <p>🎟️ Event #{ticket.eventId}</p>
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-2">
+                      <TransferTicketDialog
+                        eventId={ticket.eventId}
+                        seat={ticket.seat}
+                        eventTitle={ticket.event.title}
+                        originalPrice={ticket.event.priceMicroStx}
+                        onTransferComplete={loadUserTickets}
+                      />
                       {ticket.event.metadataUri && (
                         <Button
                           className="w-full"

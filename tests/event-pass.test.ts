@@ -178,7 +178,8 @@ describe("event-pass contract", () => {
       Cl.tuple({
         "event-id": Cl.uint(eventId),
         seat: Cl.uint(1),
-        owner: Cl.standardPrincipal(buyer),
+        owner: Cl.principal(buyer),
+        refunded: Cl.bool(false),
       }),
     );
 
@@ -310,6 +311,7 @@ describe("event-pass contract", () => {
         "event-id": Cl.uint(eventId),
         seat: Cl.uint(1),
         owner: Cl.standardPrincipal(buyer),
+        refunded: Cl.bool(false),
       }),
     );
   });
@@ -415,5 +417,338 @@ describe("event-pass contract", () => {
       buyer,
     );
     expect(endedPurchase.result).toBeErr(Cl.uint(106));
+  });
+
+  it("allows ticket holders to transfer their tickets with a 5% fee", () => {
+    const { eventId } = createEvent();
+
+    // First, buyer purchases a ticket
+    const purchase = simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+    expect(purchase.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        owner: Cl.principal(buyer),
+      }),
+    );
+
+    // Verify buyer owns the ticket
+    const { result: ticketBeforeTransfer } = simnet.callReadOnlyFn(
+      "event-pass",
+      "get-ticket-metadata",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+    expect(ticketBeforeTransfer).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        owner: Cl.principal(buyer),
+        refunded: Cl.bool(false),
+      }),
+    );
+
+    // Transfer ticket to otherBuyer (5% transfer fee = 1000 * 0.05 = 50)
+    const transfer = simnet.callPublicFn(
+      "event-pass",
+      "transfer-ticket",
+      [Cl.uint(eventId), Cl.uint(1), Cl.principal(otherBuyer)],
+      buyer,
+    );
+    
+    expect(transfer.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        from: Cl.principal(buyer),
+        to: Cl.principal(otherBuyer),
+        fee: Cl.uint(50), // 5% of 1000
+      }),
+    );
+
+    // Verify new owner
+    const { result: ticketAfterTransfer } = simnet.callReadOnlyFn(
+      "event-pass",
+      "get-ticket-metadata",
+      [Cl.uint(eventId), Cl.uint(1)],
+      otherBuyer,
+    );
+    expect(ticketAfterTransfer).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        owner: Cl.principal(otherBuyer),
+        refunded: Cl.bool(false),
+      }),
+    );
+  });
+
+  it("prevents non-owners from transferring tickets", () => {
+    const { eventId } = createEvent();
+
+    // buyer purchases ticket
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    // thirdBuyer (non-owner) attempts to transfer
+    const unauthorizedTransfer = simnet.callPublicFn(
+      "event-pass",
+      "transfer-ticket",
+      [Cl.uint(eventId), Cl.uint(1), Cl.principal(otherBuyer)],
+      thirdBuyer,
+    );
+    expect(unauthorizedTransfer.result).toBeErr(Cl.uint(111)); // ERR-NOT-TICKET-OWNER
+  });
+
+  it("prevents transferring tickets to yourself", () => {
+    const { eventId } = createEvent();
+
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    const selfTransfer = simnet.callPublicFn(
+      "event-pass",
+      "transfer-ticket",
+      [Cl.uint(eventId), Cl.uint(1), Cl.principal(buyer)],
+      buyer,
+    );
+    expect(selfTransfer.result).toBeErr(Cl.uint(112)); // ERR-TRANSFER-TO-SELF
+  });
+
+  it("prevents transferring tickets for ended events", () => {
+    const { eventId } = createEvent();
+
+    // Purchase ticket
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    // End the event
+    simnet.callPublicFn(
+      "event-pass",
+      "end-event",
+      [Cl.uint(eventId)],
+      creator,
+    );
+
+    // Try to transfer after event ended
+    const transferAfterEnd = simnet.callPublicFn(
+      "event-pass",
+      "transfer-ticket",
+      [Cl.uint(eventId), Cl.uint(1), Cl.principal(otherBuyer)],
+      buyer,
+    );
+    expect(transferAfterEnd.result).toBeErr(Cl.uint(106)); // ERR-EVENT-INACTIVE
+  });
+
+  it("allows transferring tickets for canceled events", () => {
+    const { eventId } = createEvent();
+
+    // Purchase ticket
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    // Cancel the event
+    simnet.callPublicFn(
+      "event-pass",
+      "cancel-event",
+      [Cl.uint(eventId)],
+      creator,
+    );
+
+    // Transfer should still work for canceled events (in case of refunds/resales)
+    const transferAfterCancel = simnet.callPublicFn(
+      "event-pass",
+      "transfer-ticket",
+      [Cl.uint(eventId), Cl.uint(1), Cl.principal(otherBuyer)],
+      buyer,
+    );
+    expect(transferAfterCancel.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        from: Cl.principal(buyer),
+        to: Cl.principal(otherBuyer),
+        fee: Cl.uint(50),
+      }),
+    );
+  });
+
+  it("allows ticket holders to claim refunds for canceled events", () => {
+    const { eventId } = createEvent();
+
+    // Purchase ticket
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    // Cancel the event
+    simnet.callPublicFn(
+      "event-pass",
+      "cancel-event",
+      [Cl.uint(eventId)],
+      creator,
+    );
+
+    // Claim refund (burns NFT, marks as refunded)
+    const claim = simnet.callPublicFn(
+      "event-pass",
+      "claim-refund",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    expect(claim.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        "refund-amount": Cl.uint(1000),
+      }),
+    );
+
+    // Verify ticket is marked as refunded
+    const { result: ticketAfterClaim } = simnet.callReadOnlyFn(
+      "event-pass",
+      "get-ticket-metadata",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+    expect(ticketAfterClaim).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        owner: Cl.principal(buyer),
+        refunded: Cl.bool(true),
+      }),
+    );
+
+    // Get initial buyer balance
+    const initialBalance = simnet.getAssetsMap().get("STX")?.get(buyer) || 0n;
+
+    // Creator processes the refund payment
+    const process = simnet.callPublicFn(
+      "event-pass",
+      "process-refund",
+      [Cl.uint(eventId), Cl.uint(1)],
+      creator,
+    );
+
+    expect(process.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        seat: Cl.uint(1),
+        "refunded-to": Cl.principal(buyer),
+        amount: Cl.uint(1000),
+      }),
+    );
+
+    // Verify refund was received
+    const finalBalance = simnet.getAssetsMap().get("STX")?.get(buyer) || 0n;
+    expect(finalBalance).toBe(initialBalance + 1000n);
+  });
+
+  it("prevents refund claims for non-canceled events", () => {
+    const { eventId } = createEvent();
+
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    // Try to claim refund without canceling
+    const claim = simnet.callPublicFn(
+      "event-pass",
+      "claim-refund",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+    expect(claim.result).toBeErr(Cl.uint(114)); // ERR-EVENT-NOT-CANCELED
+  });
+
+  it("prevents non-owners from claiming refunds", () => {
+    const { eventId } = createEvent();
+
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    simnet.callPublicFn(
+      "event-pass",
+      "cancel-event",
+      [Cl.uint(eventId)],
+      creator,
+    );
+
+    // otherBuyer tries to claim refund for buyer's ticket
+    const claim = simnet.callPublicFn(
+      "event-pass",
+      "claim-refund",
+      [Cl.uint(eventId), Cl.uint(1)],
+      otherBuyer,
+    );
+    expect(claim.result).toBeErr(Cl.uint(111)); // ERR-NOT-TICKET-OWNER
+  });
+
+  it("prevents double refund claims", () => {
+    const { eventId } = createEvent();
+
+    simnet.callPublicFn(
+      "event-pass",
+      "purchase-ticket",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    simnet.callPublicFn(
+      "event-pass",
+      "cancel-event",
+      [Cl.uint(eventId)],
+      creator,
+    );
+
+    // First claim succeeds
+    simnet.callPublicFn(
+      "event-pass",
+      "claim-refund",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+
+    // Second claim attempt fails
+    const secondClaim = simnet.callPublicFn(
+      "event-pass",
+      "claim-refund",
+      [Cl.uint(eventId), Cl.uint(1)],
+      buyer,
+    );
+    expect(secondClaim.result).toBeErr(Cl.uint(113)); // ERR-ALREADY-REFUNDED
   });
 });
