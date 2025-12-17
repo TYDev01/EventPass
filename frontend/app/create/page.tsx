@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { BatchPaymentDialog } from "@/components/BatchPaymentDialog";
 import { useStacks } from "@/components/StacksProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,8 @@ export default function CreateEventPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBatchPaymentOpen, setIsBatchPaymentOpen] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
 
   const formatDuration = (millis: number) => {
@@ -357,10 +360,66 @@ export default function CreateEventPage() {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to events
         </Link>
 
+        {/* Batch Payment Section */}
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
+          className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-10 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)]"
+        >
+          <div className="flex flex-col gap-6">
+            <div className="space-y-3">
+              <h2 className="text-2xl font-semibold text-foreground">Batch Pay Workers</h2>
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                Send STX payments to multiple recipients in a single transaction. Perfect for paying event staff, contractors, or performers.
+              </p>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="batch-event-id">Select Event ID</Label>
+                <Input
+                  id="batch-event-id"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Enter event ID (e.g., 1)"
+                  value={selectedEventId ?? ""}
+                  onChange={(e) => setSelectedEventId(e.target.value ? parseInt(e.target.value) : null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only the event creator can send batch payments for their events.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!address) {
+                    toast.info("Connect your wallet first");
+                    connect();
+                    return;
+                  }
+                  if (!selectedEventId || selectedEventId < 1) {
+                    toast.error("Please enter a valid event ID");
+                    return;
+                  }
+                  setIsBatchPaymentOpen(true);
+                }}
+                className="w-full"
+                size="lg"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Batch Pay Workers
+              </Button>
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
           className="glass-panel rounded-[2.5rem] border border-white/50 bg-white/70 p-10 shadow-[0_50px_120px_-60px_rgba(36,17,0,0.65)]"
         >
           <div className="flex flex-col gap-6 pb-6">
@@ -594,6 +653,12 @@ export default function CreateEventPage() {
             </div>
           </form>
         </motion.section>
+
+        <BatchPaymentDialog
+          isOpen={isBatchPaymentOpen}
+          onClose={() => setIsBatchPaymentOpen(false)}
+          eventId={selectedEventId}
+        />
       </main>
 
       <Footer />

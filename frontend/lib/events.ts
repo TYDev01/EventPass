@@ -8,6 +8,7 @@ import {
   fetchCallReadOnlyFunction,
   type ClarityValue,
   type OptionalCV,
+  type SomeCV,
   type TupleCV
 } from "@stacks/transactions";
 import { createNetwork } from "@stacks/network";
@@ -21,7 +22,7 @@ export const EVENT_IMAGE_POOL = [
   "/images/creator-lab.svg"
 ];
 
-export const MICROSTX = 1_000_000n;
+export const MICROSTX = BigInt(1_000_000);
 
 const network = createNetwork({ network: "testnet", client: { baseUrl: TESTNET_CORE_API } });
 
@@ -53,11 +54,11 @@ export type OnChainEvent = {
 
 const mapStatusCode = (code: bigint): EventStatus => {
   switch (code) {
-    case 0n:
+    case BigInt(0):
       return "Active";
-    case 1n:
+    case BigInt(1):
       return "Canceled";
-    case 2n:
+    case BigInt(2):
       return "Ended";
     default:
       return "Active";
@@ -75,17 +76,17 @@ export const normalizeBigInt = (value: unknown): bigint => {
     try {
       return BigInt(value);
     } catch {
-      return 0n;
+      return BigInt(0);
     }
   }
-  return 0n;
+  return BigInt(0);
 };
 
 const getTupleFromOptional = (value: ClarityValue): TupleCV | null => {
   if (value.type !== ClarityType.OptionalSome) {
     return null;
   }
-  const optional = value as OptionalCV;
+  const optional = value as SomeCV;
   const inner = optional.value;
   if (!inner || inner.type !== ClarityType.Tuple) {
     return null;
@@ -270,7 +271,7 @@ export const fetchOnChainEvents = async (senderAddress?: string | null): Promise
 
   if (nextId > 1n) {
     const requests: Promise<OnChainEvent | null>[] = [];
-    for (let eventId = 1n; eventId < nextId; eventId += 1n) {
+    for (let eventId = BigInt(1); eventId < nextId; eventId += BigInt(1)) {
       console.log(`  Queueing fetch for event ID: ${eventId.toString()}`);
       requests.push(fetchEventById(contractAddress, contractName, resolvedSender, eventId));
     }
@@ -282,8 +283,8 @@ export const fetchOnChainEvents = async (senderAddress?: string | null): Promise
     console.log("⚠️ nextId is 1 or less, using fallback scan");
 
     // Fallback scan for the first few event slots when the next-id lookup fails.
-    const MAX_FALLBACK_EVENTS = 100n;
-    for (let eventId = 1n; eventId <= MAX_FALLBACK_EVENTS; eventId += 1n) {
+    const MAX_FALLBACK_EVENTS = BigInt(100);
+    for (let eventId = BigInt(1); eventId <= MAX_FALLBACK_EVENTS; eventId += BigInt(1)) {
       const result = await fetchEventById(
         contractAddress,
         contractName,

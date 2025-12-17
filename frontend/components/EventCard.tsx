@@ -79,7 +79,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
       
       // Create post-condition to allow STX transfer
       const postConditions = [];
-      if (event.priceMicroStx && event.priceMicroStx > 0n) {
+      if (event.priceMicroStx && event.priceMicroStx > BigInt(0)) {
         const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
         postConditions.push(
           Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
