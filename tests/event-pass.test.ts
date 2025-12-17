@@ -751,4 +751,170 @@ describe("event-pass contract", () => {
     );
     expect(secondClaim.result).toBeErr(Cl.uint(113)); // ERR-ALREADY-REFUNDED
   });
+
+  it("allows event creator to send batch payments to multiple recipients", () => {
+    const { eventId } = createEvent();
+    
+    const recipient1 = buyer;
+    const recipient2 = otherBuyer;
+    const recipient3 = thirdBuyer;
+    
+    const amount1 = 1000;
+    const amount2 = 2000;
+    const amount3 = 1500;
+    
+    // Get initial balances
+    const initialBalance1 = simnet.getAssetsMap().get("STX")?.get(recipient1) || 0n;
+    const initialBalance2 = simnet.getAssetsMap().get("STX")?.get(recipient2) || 0n;
+    const initialBalance3 = simnet.getAssetsMap().get("STX")?.get(recipient3) || 0n;
+    
+    // Creator sends batch payment
+    const batchPay = simnet.callPublicFn(
+      "event-pass",
+      "batch-pay",
+      [
+        Cl.uint(eventId),
+        Cl.list([
+          Cl.principal(recipient1),
+          Cl.principal(recipient2),
+          Cl.principal(recipient3),
+        ]),
+        Cl.list([
+          Cl.uint(amount1),
+          Cl.uint(amount2),
+          Cl.uint(amount3),
+        ]),
+      ],
+      creator,
+    );
+    
+    expect(batchPay.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        "total-recipients": Cl.uint(3),
+        "successful-payments": Cl.uint(3),
+        "failed-payments": Cl.uint(0),
+        "total-amount-sent": Cl.uint(amount1 + amount2 + amount3),
+      }),
+    );
+    
+    // Verify all recipients received their payments
+    const finalBalance1 = simnet.getAssetsMap().get("STX")?.get(recipient1) || 0n;
+    const finalBalance2 = simnet.getAssetsMap().get("STX")?.get(recipient2) || 0n;
+    const finalBalance3 = simnet.getAssetsMap().get("STX")?.get(recipient3) || 0n;
+    
+    expect(finalBalance1).toBe(initialBalance1 + BigInt(amount1));
+    expect(finalBalance2).toBe(initialBalance2 + BigInt(amount2));
+    expect(finalBalance3).toBe(initialBalance3 + BigInt(amount3));
+  });
+
+  it("prevents non-creator from sending batch payments", () => {
+    const { eventId } = createEvent();
+    
+    const nonCreator = buyer;
+    const recipient = otherBuyer;
+    
+    const batchPay = simnet.callPublicFn(
+      "event-pass",
+      "batch-pay",
+      [
+        Cl.uint(eventId),
+        Cl.list([Cl.principal(recipient)]),
+        Cl.list([Cl.uint(1000)]),
+      ],
+      nonCreator,
+    );
+    
+    expect(batchPay.result).toBeErr(Cl.uint(107)); // ERR-NOT-CREATOR
+  });
+
+  it("rejects batch payment with mismatched list lengths", () => {
+    const { eventId } = createEvent();
+    
+    const recipient1 = buyer;
+    const recipient2 = otherBuyer;
+    
+    // 2 recipients but 3 amounts
+    const batchPay = simnet.callPublicFn(
+      "event-pass",
+      "batch-pay",
+      [
+        Cl.uint(eventId),
+        Cl.list([
+          Cl.principal(recipient1),
+          Cl.principal(recipient2),
+        ]),
+        Cl.list([
+          Cl.uint(1000),
+          Cl.uint(2000),
+          Cl.uint(3000),
+        ]),
+      ],
+      creator,
+    );
+    
+    expect(batchPay.result).toBeErr(Cl.uint(115)); // ERR-PAYMENT-LISTS-MISMATCH
+  });
+
+  it("rejects batch payment with empty lists", () => {
+    const { eventId } = createEvent();
+    
+    const batchPay = simnet.callPublicFn(
+      "event-pass",
+      "batch-pay",
+      [
+        Cl.uint(eventId),
+        Cl.list([]),
+        Cl.list([]),
+      ],
+      creator,
+    );
+    
+    expect(batchPay.result).toBeErr(Cl.uint(116)); // ERR-EMPTY-PAYMENT-LIST
+  });
+
+  it("handles partial failures in batch payment gracefully", () => {
+    const { eventId } = createEvent();
+    
+    const recipient1 = buyer;
+    const recipient2 = otherBuyer;
+    
+    // Use very large amount for second payment to cause failure
+    const amount1 = 1000;
+    const amount2 = 999999999999999; // Exceeds creator balance
+    
+    const initialBalance1 = simnet.getAssetsMap().get("STX")?.get(recipient1) || 0n;
+    
+    const batchPay = simnet.callPublicFn(
+      "event-pass",
+      "batch-pay",
+      [
+        Cl.uint(eventId),
+        Cl.list([
+          Cl.principal(recipient1),
+          Cl.principal(recipient2),
+        ]),
+        Cl.list([
+          Cl.uint(amount1),
+          Cl.uint(amount2),
+        ]),
+      ],
+      creator,
+    );
+    
+    // Should still return ok but with failed payments
+    expect(batchPay.result).toBeOk(
+      Cl.tuple({
+        "event-id": Cl.uint(eventId),
+        "total-recipients": Cl.uint(2),
+        "successful-payments": Cl.uint(1),
+        "failed-payments": Cl.uint(1),
+        "total-amount-sent": Cl.uint(amount1),
+      }),
+    );
+    
+    // First recipient should have received payment
+    const finalBalance1 = simnet.getAssetsMap().get("STX")?.get(recipient1) || 0n;
+    expect(finalBalance1).toBe(initialBalance1 + BigInt(amount1));
+  });
 });

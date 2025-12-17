@@ -14,6 +14,9 @@
 (define-constant ERR-TRANSFER-TO-SELF (err u112)) ;; Error returned when attempting to transfer a ticket to yourself.
 (define-constant ERR-ALREADY-REFUNDED (err u113)) ;; Error returned when attempting to refund a ticket that was already refunded.
 (define-constant ERR-EVENT-NOT-CANCELED (err u114)) ;; Error returned when attempting to refund a ticket for a non-canceled event.
+(define-constant ERR-PAYMENT-LISTS-MISMATCH (err u115)) ;; Error returned when recipient and amount lists have different lengths.
+(define-constant ERR-EMPTY-PAYMENT-LIST (err u116)) ;; Error returned when payment list is empty.
+(define-constant ERR-PAYMENT-FAILED (err u117)) ;; Error returned when a payment transfer fails.
 
 (define-constant STATUS-ACTIVE u0) ;; Status code meaning the event is active and accepting ticket purchases.
 (define-constant STATUS-CANCELED u1) ;; Status code meaning the event has been canceled by its creator.
@@ -259,3 +262,68 @@
       (try! (stx-transfer? (get price event-data) tx-sender (get owner ticket-data)))
       
       (ok {event-id: event-id, seat: seat, refunded-to: (get owner ticket-data), amount: (get price event-data)}))))
+
+;; ========== BATCH PAYMENT SYSTEM ==========
+
+;; Private helper for processing a single payment in batch
+(define-private (process-single-payment 
+  (payment-info {recipient: principal, amount: uint}) 
+  (context {sender: principal, success-count: uint, failed-count: uint, total-sent: uint}))
+  (let (
+    (sender (get sender context))
+    (recipient (get recipient payment-info))
+    (amount (get amount payment-info)))
+    ;; Attempt to transfer STX to recipient
+    (match (stx-transfer? amount sender recipient)
+      success
+        ;; Payment succeeded, update context
+        {sender: sender,
+         success-count: (+ (get success-count context) u1),
+         failed-count: (get failed-count context),
+         total-sent: (+ (get total-sent context) amount)}
+      error
+        ;; Payment failed, increment failed count
+        {sender: sender,
+         success-count: (get success-count context),
+         failed-count: (+ (get failed-count context) u1),
+         total-sent: (get total-sent context)})))
+
+;; Helper function to combine recipients and amounts into payment info tuples
+(define-private (build-payment-info (recipient principal) (amount uint))
+  {recipient: recipient, amount: amount})
+
+;; function batch-pay: sends STX to multiple wallet addresses with specified amounts in one transaction.
+;; This allows event creators to pay multiple people (workers, contractors, etc.) at once.
+;; Max 50 recipients per batch to avoid hitting gas limits.
+(define-public (batch-pay 
+  (event-id uint)
+  (recipients (list 50 principal)) 
+  (amounts (list 50 uint)))
+  (let (
+    (event-data (unwrap! (map-get? events {event-id: event-id}) ERR-NO-SUCH-EVENT))
+    (recipients-len (len recipients))
+    (amounts-len (len amounts)))
+    (begin
+      ;; Validate caller is event creator
+      (asserts! (is-eq tx-sender (get creator event-data)) ERR-NOT-CREATOR)
+      
+      ;; Validate lists have same length
+      (asserts! (is-eq recipients-len amounts-len) ERR-PAYMENT-LISTS-MISMATCH)
+      
+      ;; Validate lists are not empty
+      (asserts! (> recipients-len u0) ERR-EMPTY-PAYMENT-LIST)
+      
+      ;; Build payment info list by combining recipients and amounts
+      (let (
+        (payment-list (map build-payment-info recipients amounts))
+        (initial-context {sender: tx-sender, success-count: u0, failed-count: u0, total-sent: u0})
+        (final-context (fold process-single-payment payment-list initial-context)))
+        
+        ;; Return summary of batch payment
+        (ok {
+          event-id: event-id,
+          total-recipients: recipients-len,
+          successful-payments: (get success-count final-context),
+          failed-payments: (get failed-count final-context),
+          total-amount-sent: (get total-sent final-context)})))))
+
