@@ -355,73 +355,76 @@ export default function CreateEventPage() {
 
       <Header />
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-12 px-6 pb-24 pt-16">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-6 pb-24 pt-16">
         <Link href="/" className="inline-flex w-fit items-center gap-2 text-sm text-muted-foreground transition hover:text-primary">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to events
         </Link>
 
-        {/* Batch Payment Section */}
-        <motion.section
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-10 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)]"
-        >
-          <div className="flex flex-col gap-6">
-            <div className="space-y-3">
-              <h2 className="text-2xl font-semibold text-foreground">Batch Pay Workers</h2>
-              <p className="max-w-2xl text-sm text-muted-foreground">
-                Send STX payments to multiple recipients in a single transaction. Perfect for paying event staff, contractors, or performers.
-              </p>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="batch-event-id">Select Event ID</Label>
-                <Input
-                  id="batch-event-id"
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="Enter event ID (e.g., 1)"
-                  value={selectedEventId ?? ""}
-                  onChange={(e) => setSelectedEventId(e.target.value ? parseInt(e.target.value) : null)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Only the event creator can send batch payments for their events.
+        {/* Side by side sections - responsive grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Batch Payment Section */}
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-8 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)] h-fit"
+          >
+            <div className="flex flex-col gap-6">
+              <div className="space-y-3">
+                <h2 className="text-2xl font-semibold text-foreground">Batch Pay Workers</h2>
+                <p className="text-sm text-muted-foreground">
+                  Send STX payments to multiple recipients in a single transaction. Perfect for paying event staff, contractors, or performers.
                 </p>
               </div>
 
-              <Button
-                type="button"
-                onClick={() => {
-                  if (!address) {
-                    toast.info("Connect your wallet first");
-                    connect();
-                    return;
-                  }
-                  if (!selectedEventId || selectedEventId < 1) {
-                    toast.error("Please enter a valid event ID");
-                    return;
-                  }
-                  setIsBatchPaymentOpen(true);
-                }}
-                className="w-full"
-                size="lg"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Batch Pay Workers
-              </Button>
-            </div>
-          </div>
-        </motion.section>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="batch-event-id">Select Event ID</Label>
+                  <Input
+                    id="batch-event-id"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Enter event ID (e.g., 1)"
+                    value={selectedEventId ?? ""}
+                    onChange={(e) => setSelectedEventId(e.target.value ? parseInt(e.target.value) : null)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only the event creator can send batch payments for their events.
+                  </p>
+                </div>
 
-        <motion.section
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
-          className="glass-panel rounded-[2.5rem] border border-white/50 bg-white/70 p-10 shadow-[0_50px_120px_-60px_rgba(36,17,0,0.65)]"
-        >
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!address) {
+                      toast.info("Connect your wallet first");
+                      connect();
+                      return;
+                    }
+                    if (!selectedEventId || selectedEventId < 1) {
+                      toast.error("Please enter a valid event ID");
+                      return;
+                    }
+                    setIsBatchPaymentOpen(true);
+                  }}
+                  className="w-full"
+                  size="lg"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  Batch Pay Workers
+                </Button>
+              </div>
+            </div>
+          </motion.section>
+
+          {/* Event Creation Section */}
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+            className="glass-panel rounded-[2.5rem] border border-white/50 bg-white/70 p-8 shadow-[0_50px_120px_-60px_rgba(36,17,0,0.65)]"
+          >
           <div className="flex flex-col gap-6 pb-6">
             <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-primary">
               <Wallet className="h-4 w-4" aria-hidden="true" />
@@ -653,6 +656,7 @@ export default function CreateEventPage() {
             </div>
           </form>
         </motion.section>
+        </div>
 
         <BatchPaymentDialog
           isOpen={isBatchPaymentOpen}
