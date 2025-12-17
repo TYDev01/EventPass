@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { uintCV, principalCV } from "@stacks/transactions";
+import { openContractCall } from "@stacks/connect";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ type TransferTicketDialogProps = {
   eventId: number;
   seat: number;
   eventTitle: string;
-  originalPrice: number;
+  originalPrice: number | bigint;
   onTransferComplete?: () => void;
 };
 
@@ -36,14 +37,14 @@ export function TransferTicketDialog({
   originalPrice,
   onTransferComplete,
 }: TransferTicketDialogProps) {
-  const { openContractCall, userSession } = useStacks();
+  const { userSession } = useStacks();
   const [recipientAddress, setRecipientAddress] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
 
   // Convert originalPrice to BigInt if it isn't already, then calculate 5% fee
   const priceAsBigInt = typeof originalPrice === 'bigint' ? originalPrice : BigInt(originalPrice);
-  const transferFee = Number((priceAsBigInt * 5n) / 100n);
+  const transferFee = Number((priceAsBigInt * BigInt(5)) / BigInt(100));
 
   const handleTransfer = async () => {
     if (!userSession) {
