@@ -20,3 +20,4 @@ frontend/.env
 .env.local
 frontend/.env.local
 IMPROVEMENTS.md
+CHAINHOOK_EVENTS.md

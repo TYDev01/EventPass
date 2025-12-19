@@ -8,8 +8,8 @@ requirements = []
 
 [contracts.event-pass]
 path = "contracts/event-pass.clar"
-clarity_version = 1
-epoch = "2.05"
+clarity_version = 3
+epoch = "latest"
 depends_on = []
 
 [repl.analysis]
