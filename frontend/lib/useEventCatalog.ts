@@ -20,7 +20,8 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
 import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
-import { getImageFromMetadata } from "@/lib/metadata-cache";
+import { getImageFromMetadata, getFullMetadata } from "@/lib/metadata-cache";
+import { getChainhookClient } from "@/lib/chainhook-client";
 
 type EventStats = {
   active: number;
@@ -326,6 +327,27 @@ export function useEventCatalog(): EventCatalogState {
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, []);
+
+  // Listen to contract events via chainhook for real-time updates
+  useEffect(() => {
+    if (!contractConfigured || typeof window === "undefined") {
+      return;
+    }
+
+    const client = getChainhookClient(contractAddress, contractName);
+    
+    // Subscribe to all events and refresh the event list
+    const unsubscribe = client.on("*", (event) => {
+      console.log("📡 Received contract event:", event);
+      
+      // Refresh events when any contract event occurs
+      refresh();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [contractConfigured, contractAddress, contractName, refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
