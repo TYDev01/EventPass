@@ -3,10 +3,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { format } from "date-fns";
 import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
 import { stringAsciiCV, uintCV } from "@stacks/transactions";
-import { ArrowLeft, Calendar, Plus, Ticket, Trash2, Wallet } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, MapPin, Plus, Ticket, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/Header";
@@ -15,8 +16,14 @@ import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { BatchPaymentDialog } from "@/components/BatchPaymentDialog";
 import { useStacks } from "@/components/StacksProvider";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
 import { EVENT_IMAGE_POOL, fetchNextEventId, fetchOnChainEvents, formatPriceFromMicroStx, type OnChainEvent } from "@/lib/events";
 import { addPendingEvent } from "@/lib/pending-events";
@@ -50,10 +57,10 @@ export default function CreateEventPage() {
   const contractConfigured = Boolean(contractAddress && contractName);
 
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState<Date>();
+  const [location, setLocation] = useState("");
   const [price, setPrice] = useState("");
   const [totalSeats, setTotalSeats] = useState("");
-  const [metadataName, setMetadataName] = useState("");
   const [metadataDescription, setMetadataDescription] = useState("");
   const [metadataExternalUrl, setMetadataExternalUrl] = useState("");
   const [metadataAttributes, setMetadataAttributes] = useState<AttributeInput[]>([]);
@@ -101,10 +108,10 @@ export default function CreateEventPage() {
 
   const resetForm = () => {
     setTitle("");
-    setDate("");
+    setDate(undefined);
+    setLocation("");
     setPrice("");
     setTotalSeats("");
-    setMetadataName("");
     setMetadataDescription("");
     setMetadataExternalUrl("");
     setMetadataAttributes([]);
@@ -176,14 +183,13 @@ export default function CreateEventPage() {
       return false;
     }
 
-    const normalizedDate = date.trim();
-    if (!normalizedDate) {
-      toast.error("Provide a date or time label for the event.");
+    if (!date) {
+      toast.error("Please select an event date.");
       return false;
     }
 
-    if (normalizedDate.length > MAX_DATE_LENGTH) {
-      toast.error(`Date label must be ${MAX_DATE_LENGTH} characters or fewer.`);
+    if (!location.trim()) {
+      toast.error("Event location is required.");
       return false;
     }
 
@@ -196,11 +202,6 @@ export default function CreateEventPage() {
     const seatsValue = Number(totalSeats);
     if (!Number.isInteger(seatsValue) || seatsValue <= 0) {
       toast.error("Total seats must be an integer greater than zero.");
-      return false;
-    }
-
-    if (!metadataName.trim()) {
-      toast.error("Metadata name is required.");
       return false;
     }
 
@@ -241,7 +242,8 @@ export default function CreateEventPage() {
       toast.info("Review and confirm the transaction in your Leather wallet to publish the event.");
 
       const trimmedTitle = title.trim();
-      const trimmedDate = date.trim();
+      const trimmedDate = format(date, "MMMM d, yyyy");
+      const trimmedLocation = location.trim();
       const numericPrice = Number(price);
       const numericSeats = Number(totalSeats);
       const priceInMicroStx = BigInt(Math.round(numericPrice * 1_000_000));
@@ -290,18 +292,28 @@ export default function CreateEventPage() {
       const imageUrl = `${PINATA_GATEWAY_URL}${imageCid}`;
 
       const metadataPayload = {
-        name: metadataName.trim(),
+        name: trimmedTitle,
         description: metadataDescription.trim(),
         image: imageUrl,
         ...(metadataExternalUrl.trim()
           ? { external_url: metadataExternalUrl.trim() }
           : {}),
-        attributes: metadataAttributes
-          .filter((item) => item.traitType.trim() && item.value.trim())
-          .map((item) => ({
-            trait_type: item.traitType.trim(),
-            value: item.value.trim()
-          }))
+        attributes: [
+          {
+            trait_type: "Location",
+            value: trimmedLocation
+          },
+          {
+            trait_type: "Date",
+            value: trimmedDate
+          },
+          ...metadataAttributes
+            .filter((item) => item.traitType.trim() && item.value.trim())
+            .map((item) => ({
+              trait_type: item.traitType.trim(),
+              value: item.value.trim()
+            }))
+        ]
       };
 
       const metadataResponse = await fetch("/api/pinata/metadata", {
@@ -555,20 +567,47 @@ export default function CreateEventPage() {
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="date">Date or time label</Label>
-              <Input
-                id="date"
-                placeholder="June 21, 2025"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                maxLength={MAX_DATE_LENGTH}
-                disabled={isSubmitting}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                This string is stored on-chain (max {MAX_DATE_LENGTH} characters). Use a short human-readable label.
-              </p>
+            <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
+              <div className="grid gap-2">
+                <Label>Event date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`w-full justify-start text-left font-normal ${
+                        !date && "text-muted-foreground"
+                      }`}
+                      disabled={isSubmitting}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {date ? format(date, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={setDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="location">Location</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="location"
+                    placeholder="New York, NY"
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                    className="pl-9"
+                    disabled={isSubmitting}
+                    required
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
@@ -600,19 +639,6 @@ export default function CreateEventPage() {
                   required
                 />
               </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="metadata-name">NFT name</Label>
-              <Input
-                id="metadata-name"
-                placeholder="Stacks Summit 2025 Ticket"
-                value={metadataName}
-                onChange={(event) => setMetadataName(event.target.value)}
-                maxLength={MAX_TITLE_LENGTH}
-                disabled={isSubmitting}
-                required
-              />
             </div>
 
             <div className="grid gap-2">
