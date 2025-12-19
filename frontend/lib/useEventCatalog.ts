@@ -20,7 +20,7 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
 import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
-import { getImageFromMetadata, getFullMetadata } from "@/lib/metadata-cache";
+import { getImageFromMetadata } from "@/lib/metadata-cache";
 import { getChainhookClient } from "@/lib/chainhook-client";
 
 type EventStats = {
