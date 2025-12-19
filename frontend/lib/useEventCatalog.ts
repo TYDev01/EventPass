@@ -20,7 +20,7 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
 import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
-import { getImageFromMetadata } from "@/lib/metadata-cache";
+import { getImageFromMetadata, getFullMetadata } from "@/lib/metadata-cache";
 
 type EventStats = {
   active: number;
@@ -32,9 +32,11 @@ const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEve
   const mappedEvents = await Promise.all(
     events.map(async (event) => {
       const fallbackImage = getEventImageByIndex(event.id);
-      // Fetch the actual image from IPFS metadata
-      const image = await getImageFromMetadata(event.metadataUri, fallbackImage);
-      const creatorLabel = summarizePrincipal(event.creator);
+      // Fetch the full metadata from IPFS
+      const metadata = await getFullMetadata(event.metadataUri);
+      const image = metadata?.image || fallbackImage;
+      const location = metadata?.location || "EventPass • On-chain drop";
+      const description = metadata?.description || `Minted by ${summarizePrincipal(event.creator)} with EventPass smart contracts.`;
       const priceLabel = formatPriceFromMicroStx(event.priceMicroStx);
 
       return {
@@ -47,8 +49,8 @@ const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEve
         seats: event.totalSeats,
         sold: event.soldSeats,
         image,
-        description: `Minted by ${creatorLabel} with EventPass smart contracts.`,
-        location: "EventPass • On-chain drop",
+        description,
+        location,
         creator: event.creator,
         isOnChain: true,
         metadataUri: event.metadataUri

@@ -53,6 +53,8 @@ interface Recipient {
 // Unable to broadcast transaction
 // Your transaction failed to broadcast because of the error: transaction rejected
 
+
+
 interface BatchPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;

@@ -80,10 +80,23 @@ export function EventCard({ event }: { event: EventPassEvent }) {
       // Create post-condition to allow STX transfer
       const postConditions = [];
       if (event.priceMicroStx && event.priceMicroStx > BigInt(0)) {
-        const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
-        postConditions.push(
-          Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
-        );
+        try {
+          const userData = userSession.loadUserData();
+          const userAddress = userData.profile.stxAddress?.testnet || userData.profile.stxAddress?.mainnet;
+          
+          if (!userAddress) {
+            throw new Error("Unable to determine wallet address");
+          }
+          
+          postConditions.push(
+            Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
+          );
+        } catch (pcError) {
+          console.error("Error creating post-condition:", pcError);
+          toast.error("Unable to create transaction post-condition. Please reconnect your wallet.");
+          setIsPurchasing(false);
+          return;
+        }
       }
       
       await openContractCall({
@@ -131,6 +144,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     contractConfigured,
     contractName,
     event.id,
+    event.priceMicroStx,
     event.seats,
     event.sold,
     isActive,
@@ -201,13 +215,20 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             disabled={!isActive || isPending || isPurchasing || isSoldOut}
             onClick={handleBuyClick}
           >
-            {isSoldOut
-              ? "Sold Out"
-              : isPending
-              ? "Pending confirmation"
-              : isActive
-              ? "Buy Ticket"
-              : "View Details"}
+            {isPurchasing ? (
+              <>
+                <Wallet className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : isSoldOut ? (
+              "Sold Out"
+            ) : isPending ? (
+              "Pending confirmation"
+            ) : isActive ? (
+              `Buy Ticket • ${event.price}`
+            ) : (
+              "View Details"
+            )}
           </Button>
           {event.metadataUri ? (
             <Button

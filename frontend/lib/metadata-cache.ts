@@ -1,5 +1,5 @@
 // Cache for fetched metadata to avoid repeated requests
-const metadataCache = new Map<string, { image: string; name?: string }>();
+const metadataCache = new Map<string, { image: string; name?: string; description?: string; location?: string }>();
 
 export async function getImageFromMetadata(metadataUri: string, fallbackImage: string): Promise<string> {
   if (!metadataUri || metadataUri.length === 0) {
@@ -33,14 +33,37 @@ export async function getImageFromMetadata(metadataUri: string, fallbackImage: s
       finalImageUrl = imageUrl.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
     }
 
+    // Extract location and description from attributes
+    const attributes = metadata.attributes || [];
+    const locationAttr = attributes.find((attr: any) => attr.trait_type === 'Location');
+    const location = locationAttr?.value || '';
+    const description = metadata.description || '';
+
     // Cache the result
-    metadataCache.set(metadataUri, { image: finalImageUrl, name: metadata.name });
+    metadataCache.set(metadataUri, { 
+      image: finalImageUrl, 
+      name: metadata.name,
+      description,
+      location
+    });
     
     return finalImageUrl;
   } catch (error) {
     console.error('Error fetching metadata:', error);
     return fallbackImage;
   }
+}
+
+export async function getFullMetadata(metadataUri: string) {
+  if (!metadataUri || metadataUri.length === 0) {
+    return null;
+  }
+
+  // Trigger cache population by calling getImageFromMetadata
+  await getImageFromMetadata(metadataUri, '');
+  
+  // Return cached metadata
+  return metadataCache.get(metadataUri) || null;
 }
 
 export function clearMetadataCache() {
