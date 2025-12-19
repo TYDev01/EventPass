@@ -10,7 +10,8 @@ const urbanist = Urbanist({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-urbanist",
-  display: "swap"
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"]
 });
 
 export const metadata: Metadata = {
@@ -24,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={urbanist.variable} suppressHydrationWarning>
-      <body className={cn("min-h-screen bg-hero-accent text-foreground", urbanist.className)}>
+    <html lang="en" className={cn(urbanist.variable, "antialiased")} suppressHydrationWarning>
+      <body className={cn("min-h-screen bg-hero-accent text-foreground font-sans", urbanist.className)}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <StacksProvider>{children}</StacksProvider>
           <Toaster />

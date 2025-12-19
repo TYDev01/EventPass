@@ -20,7 +20,8 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
 import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
-import { getImageFromMetadata, getFullMetadata } from "@/lib/metadata-cache";
+import { getImageFromMetadata } from "@/lib/metadata-cache";
+import { getChainhookClient } from "@/lib/chainhook-client";
 
 type EventStats = {
   active: number;
@@ -32,11 +33,9 @@ const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEve
   const mappedEvents = await Promise.all(
     events.map(async (event) => {
       const fallbackImage = getEventImageByIndex(event.id);
-      // Fetch the full metadata from IPFS
-      const metadata = await getFullMetadata(event.metadataUri);
-      const image = metadata?.image || fallbackImage;
-      const location = metadata?.location || "EventPass • On-chain drop";
-      const description = metadata?.description || `Minted by ${summarizePrincipal(event.creator)} with EventPass smart contracts.`;
+      // Fetch the actual image from IPFS metadata
+      const image = await getImageFromMetadata(event.metadataUri, fallbackImage);
+      const creatorLabel = summarizePrincipal(event.creator);
       const priceLabel = formatPriceFromMicroStx(event.priceMicroStx);
 
       return {
@@ -49,8 +48,8 @@ const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEve
         seats: event.totalSeats,
         sold: event.soldSeats,
         image,
-        description,
-        location,
+        description: `Minted by ${creatorLabel} with EventPass smart contracts.`,
+        location: "EventPass • On-chain drop",
         creator: event.creator,
         isOnChain: true,
         metadataUri: event.metadataUri
@@ -328,6 +327,27 @@ export function useEventCatalog(): EventCatalogState {
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, []);
+
+  // Listen to contract events via chainhook for real-time updates
+  useEffect(() => {
+    if (!contractConfigured || typeof window === "undefined") {
+      return;
+    }
+
+    const client = getChainhookClient(contractAddress, contractName);
+    
+    // Subscribe to all events and refresh the event list
+    const unsubscribe = client.on("*", (event) => {
+      console.log("📡 Received contract event:", event);
+      
+      // Refresh events when any contract event occurs
+      refresh();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [contractConfigured, contractAddress, contractName, refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

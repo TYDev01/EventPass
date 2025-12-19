@@ -4,7 +4,7 @@ import { useState } from "react";
 import { X, Plus, Trash2, Send, Loader2 } from "lucide-react";
 import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
-import { uintCV, listCV, principalCV } from "@stacks/transactions";
+import { uintCV, listCV, principalCV, PostConditionMode } from "@stacks/transactions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -145,7 +145,7 @@ export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDia
         uintCV(Math.floor(parseFloat(r.amount) * 1_000_000))
       );
 
-      await openContractCall({
+      openContractCall({
         network: stacksTestnet,
         appDetails: buildAppDetails(),
         contractAddress,
@@ -156,6 +156,7 @@ export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDia
           listCV(recipientPrincipals),
           listCV(amountsInMicroSTX)
         ],
+        postConditionMode: PostConditionMode.Allow,
         onFinish: (data) => {
           console.log("Batch payment transaction:", data);
           toast.success(
