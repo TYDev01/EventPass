@@ -77,36 +77,12 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     try {
       setIsPurchasing(true);
       
-      // Create post-condition to allow STX transfer
-      const postConditions = [];
-      if (event.priceMicroStx && event.priceMicroStx > BigInt(0)) {
-        try {
-          const userData = userSession.loadUserData();
-          const userAddress = userData.profile.stxAddress?.testnet || userData.profile.stxAddress?.mainnet;
-          
-          if (!userAddress) {
-            throw new Error("Unable to determine wallet address");
-          }
-          
-          postConditions.push(
-            Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
-          );
-        } catch (pcError) {
-          console.error("Error creating post-condition:", pcError);
-          toast.error("Unable to create transaction post-condition. Please reconnect your wallet.");
-          setIsPurchasing(false);
-          return;
-        }
-      }
-      
-      await openContractCall({
+      openContractCall({
         contractAddress,
         contractName,
         functionName: "purchase-ticket",
-        functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))],
-        postConditions,
-        postConditionMode: PostConditionMode.Deny,
-        userSession,
+        functionArgs: [uintCV(event.id), uintCV(seatNumber)],
+        postConditionMode: PostConditionMode.Allow,
         appDetails: buildAppDetails(),
         network,
         onCancel: () => {
