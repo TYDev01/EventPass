@@ -17,11 +17,41 @@ const stacksTestnet = createNetwork({
   client: { baseUrl: TESTNET_CORE_API }
 });
 
+
 interface Recipient {
   id: string;
   address: string;
   amount: string;
 }
+
+// ST3AFWCGYF2JJEBNANT3CD9HWFJY715DMYDE368DW
+// STDEJDF3200G4SQ4GMA1QQ5VT013QBQF5QE84AT0
+
+// batch-pay
+
+// Requested by "EventPass" (localhost) using api.testnet.hiro.so
+// No transfers (besides fees) will be made from your account or the transaction will abort.
+// Function and arguments
+// Dynamic avatar
+// batch-pay
+// ST2S…GDSK.event-pass-v2
+// unknown
+// uint
+// u1
+// unknown
+// (list 2 principal)
+// (list STDEJDF3200G4SQ4GMA1QQ5VT013QBQF5QE84AT0 ST3AFWCGYF2JJEBNANT3CD9HWFJY715DMYDE368DW)
+// unknown
+// (list 2 uint)
+// (list u10000000 u20000000)
+
+// Fee
+// Standard
+// 0.003 STX
+// Edit nonce
+
+// Unable to broadcast transaction
+// Your transaction failed to broadcast because of the error: transaction rejected
 
 interface BatchPaymentDialogProps {
   isOpen: boolean;

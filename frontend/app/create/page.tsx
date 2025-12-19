@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { openContractCall } from "@stacks/connect";
 import { createNetwork } from "@stacks/network";
 import { stringAsciiCV, uintCV } from "@stacks/transactions";
-import { ArrowLeft, Plus, Trash2, Wallet } from "lucide-react";
+import { ArrowLeft, Calendar, Plus, Ticket, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/Header";
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
-import { EVENT_IMAGE_POOL, fetchNextEventId } from "@/lib/events";
+import { EVENT_IMAGE_POOL, fetchNextEventId, fetchOnChainEvents, formatPriceFromMicroStx, type OnChainEvent } from "@/lib/events";
 import { addPendingEvent } from "@/lib/pending-events";
 import {
   canCreateEventToday,
@@ -62,6 +62,8 @@ export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchPaymentOpen, setIsBatchPaymentOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [userEvents, setUserEvents] = useState<OnChainEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
 
   const formatDuration = (millis: number) => {
@@ -73,6 +75,29 @@ export default function CreateEventPage() {
     }
     return `${Math.max(minutes, 1)}m`;
   };
+
+  // Fetch user's created events
+  useEffect(() => {
+    if (!address) {
+      setUserEvents([]);
+      return;
+    }
+
+    const loadUserEvents = async () => {
+      setIsLoadingEvents(true);
+      try {
+        const allEvents = await fetchOnChainEvents(address);
+        const myEvents = allEvents.filter(event => event.creator === address);
+        setUserEvents(myEvents);
+      } catch (error) {
+        console.error("Failed to load user events:", error);
+      } finally {
+        setIsLoadingEvents(false);
+      }
+    };
+
+    loadUserEvents();
+  }, [address]);
 
   const resetForm = () => {
     setTitle("");
@@ -362,13 +387,89 @@ export default function CreateEventPage() {
 
         {/* Side by side sections - responsive grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Batch Payment Section */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-8 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)] h-fit"
-          >
+          {/* Left Column - User's Events & Batch Payment */}
+          <div className="flex flex-col gap-8">
+            {/* User's Created Events */}
+            {address && (
+              <motion.section
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-8 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)]"
+              >
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-semibold text-foreground">Your Events</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Select an event to send batch payments to workers.
+                    </p>
+                  </div>
+                  {isLoadingEvents ? (
+                    <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+                      Loading your events...
+                    </div>
+                  ) : userEvents.length === 0 ? (
+                    <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                      You haven't created any events yet. Create your first event to get started.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {userEvents.map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => setSelectedEventId(event.id)}
+                          className={`w-full rounded-lg border p-4 text-left transition hover:border-primary/50 hover:bg-primary/5 ${
+                            selectedEventId === event.id
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-background"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-semibold text-primary">#{event.id}</span>
+                                <span className="text-sm font-medium text-foreground truncate">{event.title}</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {event.date}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Ticket className="h-3 w-3" />
+                                  {event.soldSeats}/{event.totalSeats} sold
+                                </span>
+                                <span className="font-medium text-primary">
+                                  {formatPriceFromMicroStx(event.priceMicroStx)}
+                                </span>
+                              </div>
+                            </div>
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                              event.status === "Active"
+                                ? "bg-green-100 text-green-700"
+                                : event.status === "Ended"
+                                ? "bg-gray-100 text-gray-700"
+                                : "bg-red-100 text-red-700"
+                            }`}>
+                              {event.status}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.section>
+            )}
+
+            {/* Batch Payment Section */}
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+              className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-8 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)] h-fit"
+            >
             <div className="flex flex-col gap-6">
               <div className="space-y-3">
                 <h2 className="text-2xl font-semibold text-foreground">Batch Pay Workers</h2>
@@ -417,12 +518,13 @@ export default function CreateEventPage() {
               </div>
             </div>
           </motion.section>
+          </div>
 
-          {/* Event Creation Section */}
+          {/* Right Column - Event Creation Section */}
           <motion.section
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
             className="glass-panel rounded-[2.5rem] border border-white/50 bg-white/70 p-8 shadow-[0_50px_120px_-60px_rgba(36,17,0,0.65)]"
           >
           <div className="flex flex-col gap-6 pb-6">

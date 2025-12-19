@@ -106,6 +106,7 @@
            status: STATUS-ACTIVE, ;; Mark the event as active so ticket sales are permitted.
            metadata-uri: metadata-uri}) ;; Persist the metadata pointer used to render ticket NFTs.
         (var-set next-event-id (+ event-id u1)) ;; Increment the counter so the next event receives a new identifier.
+        (print {event: "event-created", event-id: event-id, creator: tx-sender, title: title, price: price, total-seats: total-seats})
         (ok event-id))))) ;; Return the newly assigned event identifier wrapped in an ok response.
 
 ;; function purchase-ticket: sells a designated seat, updates inventory, and mints the ticket NFT.
@@ -141,6 +142,7 @@
                          {event-id: event-id, ;; Use the event identifier as part of the NFT token identifier.
                           seat: seat} ;; Use the seat number as the second component of the NFT token identifier.
                          tx-sender)) ;; Assign ownership of the freshly minted NFT to the buyer.
+        (print {event: "ticket-purchased", event-id: event-id, seat: seat, buyer: tx-sender, price: (get price event-data)})
         (ok {event-id: event-id, seat: seat, owner: tx-sender}))))) ;; Return the ticket metadata confirming the purchase.
 
 ;; function cancel-event: allows the event creator to mark an event as canceled and halt future ticket sales.
@@ -159,6 +161,7 @@
          sold-seats: (get sold-seats event-data), ;; Preserve sales count.
          status: STATUS-CANCELED, ;; Apply the canceled status code.
          metadata-uri: (get metadata-uri event-data)}) ;; Preserve the metadata pointer when updating status.
+      (print {event: "event-canceled", event-id: event-id, creator: tx-sender})
       (ok STATUS-CANCELED)))) ;; Return the new status code to the caller.
 
 ;; function end-event: allows the event creator to mark an event as ended once it is complete.
@@ -177,6 +180,7 @@
          sold-seats: (get sold-seats event-data), ;; Preserve sales count.
          status: STATUS-ENDED, ;; Apply the ended status code.
          metadata-uri: (get metadata-uri event-data)}) ;; Preserve the metadata pointer when ending an event.
+      (print {event: "event-ended", event-id: event-id, creator: tx-sender})
       (ok STATUS-ENDED)))) ;; Return the new status code to the caller.
 
 ;; function set-contract-metadata: allows the contract deployer to advertise a metadata document for the entire collection.
@@ -224,6 +228,7 @@
                           tx-sender
                           recipient))
       
+      (print {event: "ticket-transferred", event-id: event-id, seat: seat, from: tx-sender, to: recipient, fee: transfer-fee})
       (ok {event-id: event-id, seat: seat, from: tx-sender, to: recipient, fee: transfer-fee}))))
 
 ;; function claim-refund: allows ticket holders to claim a refund for canceled events (creator pays).
@@ -245,6 +250,7 @@
       ;; Burn the NFT since it's been refunded
       (try! (nft-burn? ticket {event-id: event-id, seat: seat} tx-sender))
       
+      (print {event: "refund-claimed", event-id: event-id, seat: seat, owner: tx-sender, amount: (get price event-data)})
       (ok {event-id: event-id, seat: seat, refund-amount: (get price event-data)}))))
 
 ;; function process-refund: allows event creator to process refund by sending STX to ticket holder.
@@ -261,6 +267,7 @@
       ;; Transfer refund amount from creator to ticket holder
       (try! (stx-transfer? (get price event-data) tx-sender (get owner ticket-data)))
       
+      (print {event: "refund-processed", event-id: event-id, seat: seat, refunded-to: (get owner ticket-data), amount: (get price event-data)})
       (ok {event-id: event-id, seat: seat, refunded-to: (get owner ticket-data), amount: (get price event-data)}))))
 
 ;; ========== BATCH PAYMENT SYSTEM ==========
@@ -318,6 +325,15 @@
         (payment-list (map build-payment-info recipients amounts))
         (initial-context {sender: tx-sender, success-count: u0, failed-count: u0, total-sent: u0})
         (final-context (fold process-single-payment payment-list initial-context)))
+        
+        ;; Emit batch payment event
+        (print {
+          event: "batch-payment",
+          event-id: event-id,
+          total-recipients: recipients-len,
+          successful-payments: (get success-count final-context),
+          failed-payments: (get failed-count final-context),
+          total-amount-sent: (get total-sent final-context)})
         
         ;; Return summary of batch payment
         (ok {
