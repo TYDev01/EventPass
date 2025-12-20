@@ -166,6 +166,23 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             <span className="text-sm font-semibold text-primary">{event.price}</span>
           </div>
           <h3 className="text-xl font-semibold text-foreground">{event.title}</h3>
+          {(event.category || (event.tags && event.tags.length > 0)) ? (
+            <div className="flex flex-wrap gap-2 text-xs font-medium">
+              {event.category ? (
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-primary">
+                  {event.category}
+                </span>
+              ) : null}
+              {event.tags?.slice(0, 2).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-border bg-white/70 px-2.5 py-1 text-foreground/70"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <p className="text-sm text-muted-foreground">{event.description}</p>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">

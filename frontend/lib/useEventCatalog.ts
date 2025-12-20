@@ -20,7 +20,7 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { summarizePrincipal, summarizeHash } from "@/lib/utils";
 import { reconcilePendingWithTransaction } from "@/lib/transaction-status";
-import { getImageFromMetadata, getFullMetadata } from "@/lib/metadata-cache";
+import { getImageFromMetadata } from "@/lib/metadata-cache";
 import { getChainhookClient } from "@/lib/chainhook-client";
 
 type EventStats = {
@@ -29,16 +29,49 @@ type EventStats = {
   capacity: number;
 };
 
+const deriveCategory = (title: string, description: string): string => {
+  const haystack = `${title} ${description}`.toLowerCase();
+  if (haystack.includes("music") || haystack.includes("live")) {
+    return "Music";
+  }
+  if (haystack.includes("art") || haystack.includes("immersive") || haystack.includes("creator")) {
+    return "Art";
+  }
+  if (haystack.includes("sports") || haystack.includes("stadium")) {
+    return "Sports";
+  }
+  if (haystack.includes("defi") || haystack.includes("summit") || haystack.includes("stack")) {
+    return "Tech";
+  }
+  return "General";
+};
+
+const deriveTags = (title: string, description: string): string[] => {
+  const tokens = `${title} ${description}`
+    .split(/[\s,.;:!?\-()]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2);
+  const uniq = new Set<string>();
+  for (const token of tokens) {
+    if (uniq.size >= 5) {
+      break;
+    }
+    const normalized = token[0].toUpperCase() + token.slice(1);
+    uniq.add(normalized);
+  }
+  return Array.from(uniq);
+};
+
 const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEvent[]> => {
   const mappedEvents = await Promise.all(
     events.map(async (event) => {
       const fallbackImage = getEventImageByIndex(event.id);
-      // Fetch the actual image and metadata from IPFS
+      // Fetch the actual image from IPFS metadata
       const image = await getImageFromMetadata(event.metadataUri, fallbackImage);
-      const metadata = await getFullMetadata(event.metadataUri);
       const creatorLabel = summarizePrincipal(event.creator);
       const priceLabel = formatPriceFromMicroStx(event.priceMicroStx);
 
+      const description = `Minted by ${creatorLabel} with EventPass smart contracts.`;
       return {
         id: event.id,
         title: event.title,
@@ -49,9 +82,11 @@ const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEve
         seats: event.totalSeats,
         sold: event.soldSeats,
         image,
-        description: metadata?.description || `Minted by ${creatorLabel} with EventPass smart contracts.`,
-        location: metadata?.location || "EventPass • On-chain drop",
+        description,
+        location: "EventPass • On-chain drop",
         creator: event.creator,
+        category: deriveCategory(event.title, description),
+        tags: deriveTags(event.title, description),
         isOnChain: true,
         metadataUri: event.metadataUri
       };
@@ -115,6 +150,8 @@ const mapPendingToDisplayEvents = (records: PendingEventRecord[]): EventPassEven
         description: `Awaiting confirmation for transaction ${summarizeHash(record.txId)}.`,
         location: "Pending on-chain confirmation",
         creator: record.creator,
+        category: "General",
+        tags: ["Pending"],
         isOnChain: false,
         txId: record.txId,
         metadataUri: record.metadataUri
