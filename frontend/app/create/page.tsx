@@ -65,6 +65,7 @@ export default function CreateEventPage() {
   const [metadataExternalUrl, setMetadataExternalUrl] = useState("");
   const [metadataAttributes, setMetadataAttributes] = useState<AttributeInput[]>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchPaymentOpen, setIsBatchPaymentOpen] = useState(false);
@@ -116,8 +117,21 @@ export default function CreateEventPage() {
     setMetadataExternalUrl("");
     setMetadataAttributes([]);
     setImageFile(null);
+    setImagePreviewUrl(null);
     setImageError(null);
   };
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(previewUrl);
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [imageFile]);
 
   const handleImageSelection = (files: FileList | null) => {
     if (!files || files.length === 0) {
@@ -684,6 +698,15 @@ export default function CreateEventPage() {
                 disabled={isSubmitting}
                 required
               />
+              {imagePreviewUrl ? (
+                <div className="rounded-xl border border-border bg-white/80 p-3">
+                  <img
+                    src={imagePreviewUrl}
+                    alt="Ticket artwork preview"
+                    className="h-40 w-full rounded-lg object-cover"
+                  />
+                </div>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 Upload high-resolution artwork (PNG, JPG, SVG, or WEBP). Maximum 1MB.
               </p>
