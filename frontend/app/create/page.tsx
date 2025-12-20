@@ -449,9 +449,9 @@ export default function CreateEventPage() {
                                 <span className="text-sm font-medium text-foreground truncate">{event.title}</span>
                               </div>
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1">
+                                <span className="flex min-w-0 items-center gap-1">
                                   <Calendar className="h-3 w-3" />
-                                  {event.date}
+                                  <span className="truncate">{event.date}</span>
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Ticket className="h-3 w-3" />
@@ -585,7 +585,7 @@ export default function CreateEventPage() {
                       disabled={isSubmitting}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP") : "Pick a date"}
+                      <span className="truncate">{date ? format(date, "PPP") : "Pick a date"}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
