@@ -1,3 +1,4 @@
+@import "react-big-calendar/lib/css/react-big-calendar.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -61,4 +62,34 @@ body {
 
 .dark .glass-panel {
   @apply bg-white/5 border-white/10;
+}
+
+.eventpass-calendar .rbc-toolbar {
+  @apply flex flex-wrap gap-3 text-sm font-medium text-foreground;
+}
+
+.eventpass-calendar .rbc-toolbar button {
+  @apply rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-foreground shadow-sm;
+}
+
+.eventpass-calendar .rbc-toolbar button.rbc-active {
+  @apply border-primary/40 bg-primary/10 text-primary;
+}
+
+.eventpass-calendar .rbc-month-view,
+.eventpass-calendar .rbc-time-view,
+.eventpass-calendar .rbc-agenda-view {
+  @apply rounded-2xl border border-border/70 bg-white;
+}
+
+.eventpass-calendar .rbc-today {
+  @apply bg-primary/10;
+}
+
+.eventpass-calendar .rbc-off-range-bg {
+  @apply bg-muted/40;
+}
+
+.eventpass-calendar .rbc-header {
+  @apply border-border/60 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground;
 }
