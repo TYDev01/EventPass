@@ -218,7 +218,7 @@ const parseEventTuple = (eventId: number, tuple: TupleCV): OnChainEvent => {
   };
 };
 
-const fetchEventById = async (
+export const fetchEventById = async (
   contractAddress: string,
   contractName: string,
   senderAddress: string,

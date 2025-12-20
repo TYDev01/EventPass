@@ -7,6 +7,7 @@ import { useStacks } from "@/components/StacksProvider";
 import { events as sampleEvents, type EventPassEvent } from "@/lib/data";
 import {
   fetchOnChainEvents,
+  fetchEventById,
   formatPriceFromMicroStx,
   getEventImageByIndex,
   type OnChainEvent
@@ -93,6 +94,11 @@ const mapOnChainToDisplay = async (events: OnChainEvent[]): Promise<EventPassEve
     })
   );
   return mappedEvents;
+};
+
+const mapOnChainEvent = async (event: OnChainEvent): Promise<EventPassEvent> => {
+  const [mapped] = await mapOnChainToDisplay([event]);
+  return mapped;
 };
 
 const computeStats = (events: EventPassEvent[]): EventStats =>
@@ -373,19 +379,75 @@ export function useEventCatalog(): EventCatalogState {
     }
 
     const client = getChainhookClient(contractAddress, contractName);
-    
-    // Subscribe to all events and refresh the event list
-    const unsubscribe = client.on("*", (event) => {
-      console.log("📡 Received contract event:", event);
-      
-      // Refresh events when any contract event occurs
-      refresh();
-    });
+
+    const handleEventCreated = async (event: { eventId?: number | string }) => {
+      const eventId = Number(event.eventId);
+      if (!Number.isFinite(eventId)) {
+        return;
+      }
+      try {
+        const sender = address ?? contractAddress;
+        const fetched = await fetchEventById(
+          contractAddress,
+          contractName,
+          sender,
+          BigInt(eventId)
+        );
+        if (!fetched) {
+          return;
+        }
+        const mapped = await mapOnChainEvent(fetched);
+        setOnChainEvents((prev) => {
+          const filtered = prev.filter((item) => item.id !== mapped.id);
+          return [mapped, ...filtered].sort((a, b) => b.id - a.id);
+        });
+        setPendingRecords((prev) =>
+          prev.filter((record) => record.expectedEventId !== eventId)
+        );
+      } catch (error) {
+        console.warn("Failed to hydrate created event from chainhook", error);
+        refresh();
+      }
+    };
+
+    const handleTicketPurchased = async (event: { eventId?: number | string }) => {
+      const eventId = Number(event.eventId);
+      if (!Number.isFinite(eventId)) {
+        return;
+      }
+      try {
+        const sender = address ?? contractAddress;
+        const fetched = await fetchEventById(
+          contractAddress,
+          contractName,
+          sender,
+          BigInt(eventId)
+        );
+        if (!fetched) {
+          return;
+        }
+        const mapped = await mapOnChainEvent(fetched);
+        setOnChainEvents((prev) => {
+          const hasExisting = prev.some((item) => item.id === mapped.id);
+          if (!hasExisting) {
+            return [mapped, ...prev].sort((a, b) => b.id - a.id);
+          }
+          return prev.map((item) => (item.id === mapped.id ? mapped : item));
+        });
+      } catch (error) {
+        console.warn("Failed to update ticket purchase from chainhook", error);
+        refresh();
+      }
+    };
+
+    const unsubscribeCreate = client.on("event-created", handleEventCreated);
+    const unsubscribePurchase = client.on("ticket-purchased", handleTicketPurchased);
 
     return () => {
-      unsubscribe();
+      unsubscribeCreate();
+      unsubscribePurchase();
     };
-  }, [contractConfigured, contractAddress, contractName, refresh]);
+  }, [address, contractConfigured, contractAddress, contractName, refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
