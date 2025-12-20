@@ -479,7 +479,7 @@ export default function CreateEventPage() {
                                 <span className="text-sm font-medium text-foreground truncate">{event.title}</span>
                               </div>
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                <span className="flex min-w-0 items-center gap-1">
+                                <span className="flex min-w-0 basis-full items-center gap-1">
                                   <Calendar className="h-3 w-3" />
                                   <span className="truncate">{event.date}</span>
                                 </span>

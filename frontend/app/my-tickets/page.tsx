@@ -52,15 +52,15 @@ export default function MyTicketsPage() {
       // Fetch all events
       const events = await fetchOnChainEvents(userAddress);
       
-      console.log("📋 Checking tickets for user:", userAddress);
-      console.log("📋 Found events:", events.length);
+      console.log(" Checking tickets for user:", userAddress);
+      console.log(" Found events:", events.length);
       
       // For each event, check which seats the user owns
       const userTickets: UserTicket[] = [];
       const network = createNetwork({ network: STACKS_NETWORK, client: { baseUrl: CORE_API_BASE_URL } });
 
       for (const event of events) {
-        console.log(`🎫 Checking event ${event.id}: ${event.title} (${event.soldSeats} seats sold)`);
+        console.log(` Checking event ${event.id}: ${event.title} (${event.soldSeats} seats sold)`);
         
         // Only check seats that have been sold
         if (event.soldSeats === 0) {
@@ -112,7 +112,7 @@ export default function MyTicketsPage() {
                   console.log(`  Match: ${owner === userAddress}`);
                   
                   if (owner === userAddress) {
-                    console.log(`  ✅ User owns seat ${seat}!`);
+                    console.log(`   User owns seat ${seat}!`);
                     userTickets.push({
                       eventId: event.id,
                       seat,
@@ -122,16 +122,16 @@ export default function MyTicketsPage() {
                 }
               }
             } else {
-              console.log(`  ⚠️ Seat ${seat} not an ok response, type: ${response.type}`);
+              console.log(`   Seat ${seat} not an ok response, type: ${response.type}`);
             }
           } catch (err) {
-            console.log(`  ⚠️ Error checking seat ${seat}:`, err);
+            console.log(`   Error checking seat ${seat}:`, err);
             continue;
           }
         }
       }
 
-      console.log("🎉 Total tickets found:", userTickets.length);
+      console.log(" Total tickets found:", userTickets.length);
 
       setTickets(userTickets);
       setIsLoading(false);
@@ -245,9 +245,9 @@ export default function MyTicketsPage() {
                     <CardHeader className="space-y-3">
                       <h3 className="text-xl font-semibold text-foreground">{ticket.event.title}</h3>
                       <div className="space-y-2 text-sm text-muted-foreground">
-                        <p>📅 {ticket.event.date}</p>
-                        <p>💰 {formatPriceFromMicroStx(ticket.event.priceMicroStx)}</p>
-                        <p>🎟️ Event #{ticket.eventId}</p>
+                        <p> {ticket.event.date}</p>
+                        <p> {formatPriceFromMicroStx(ticket.event.priceMicroStx)}</p>
+                        <p> Event #{ticket.eventId}</p>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-2">

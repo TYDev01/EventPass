@@ -84,7 +84,7 @@ class ChainhookClient {
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
-        console.log("✅ Chainhook client connected");
+        console.log(" Chainhook client connected");
         this.reconnectAttempts = 0;
         this.isConnecting = false;
         

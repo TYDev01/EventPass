@@ -98,24 +98,24 @@ const readTupleField = (tuple: TupleCV, key: string) => {
   // Try .data first (newer format)
   const record = (tuple as any).data;
   if (record && typeof record === 'object' && key in record) {
-    console.log(`✅ Found "${key}" in .data:`, record[key]);
+    console.log(` Found "${key}" in .data:`, record[key]);
     return record[key];
   }
   
   // Try .value (legacy format)
   const legacy = (tuple as any).value;
   if (legacy && typeof legacy === 'object' && key in legacy) {
-    console.log(`✅ Found "${key}" in .value:`, legacy[key]);
+    console.log(` Found "${key}" in .value:`, legacy[key]);
     return legacy[key];
   }
   
   // Try direct access
   if (key in tuple) {
-    console.log(`✅ Found "${key}" directly:`, (tuple as any)[key]);
+    console.log(` Found "${key}" directly:`, (tuple as any)[key]);
     return (tuple as any)[key];
   }
   
-  console.warn(`⚠️ Could not find field "${key}" in tuple.`);
+  console.warn(` Could not find field "${key}" in tuple.`);
   console.log('Available in .data:', record ? Object.keys(record) : 'N/A');
   console.log('Available in .value:', legacy ? Object.keys(legacy) : 'N/A');
   console.log('Available directly:', Object.keys(tuple));
@@ -182,7 +182,7 @@ const readUInt = (tuple: TupleCV, key: string): bigint => {
 };
 
 const parseEventTuple = (eventId: number, tuple: TupleCV): OnChainEvent => {
-  console.log(`📝 Parsing event #${eventId}, raw tuple:`, tuple);
+  console.log(` Parsing event #${eventId}, raw tuple:`, tuple);
   
   // Use manual parsing with cvToString for reliable string conversion
   const title = readString(tuple, "title", `Event #${eventId}`);
@@ -225,7 +225,7 @@ export const fetchEventById = async (
   eventId: bigint
 ): Promise<OnChainEvent | null> => {
   try {
-    console.log(`  📞 Fetching event ${eventId}...`);
+    console.log(`   Fetching event ${eventId}...`);
     const response = await fetchCallReadOnlyFunction({
       contractAddress,
       contractName,
@@ -235,19 +235,19 @@ export const fetchEventById = async (
       senderAddress
     });
 
-    console.log(`  📦 Raw response for event ${eventId}:`, response);
+    console.log(`   Raw response for event ${eventId}:`, response);
 
     const tuple = getTupleFromOptional(response);
     if (!tuple) {
-      console.warn(`  ⚠️ Event ${eventId} returned empty/none`);
+      console.warn(`   Event ${eventId} returned empty/none`);
       return null;
     }
 
     const parsed = parseEventTuple(Number(eventId), tuple);
-    console.log(`  ✅ Successfully parsed event ${eventId}`);
+    console.log(`   Successfully parsed event ${eventId}`);
     return parsed;
   } catch (error) {
-    console.error(`❌ Failed to fetch event ${eventId.toString()}:`, error);
+    console.error(` Failed to fetch event ${eventId.toString()}:`, error);
     return null;
   }
 };
@@ -255,17 +255,17 @@ export const fetchEventById = async (
 export const fetchOnChainEvents = async (senderAddress?: string | null): Promise<OnChainEvent[]> => {
   const { contractAddress, contractName } = getContractParts();
 
-  console.log("🎯 fetchOnChainEvents called with:", { contractAddress, contractName, senderAddress });
+  console.log(" fetchOnChainEvents called with:", { contractAddress, contractName, senderAddress });
 
   if (!contractAddress || !contractName) {
-    console.warn("❌ No contract configured");
+    console.warn(" No contract configured");
     return [];
   }
 
   const resolvedSender = resolveSenderAddress(senderAddress, contractAddress);
   const nextId = await fetchNextEventId(resolvedSender);
 
-  console.log(`📋 Will fetch events from 1 to ${(nextId - 1n).toString()}`);
+  console.log(` Will fetch events from 1 to ${(nextId - 1n).toString()}`);
 
   const events: OnChainEvent[] = [];
 
@@ -278,9 +278,9 @@ export const fetchOnChainEvents = async (senderAddress?: string | null): Promise
     console.log(`⏳ Fetching ${requests.length} events...`);
     const results = await Promise.all(requests);
     events.push(...results.filter((item): item is OnChainEvent => Boolean(item)));
-    console.log(`✅ Successfully fetched ${events.length} events`);
+    console.log(` Successfully fetched ${events.length} events`);
   } else {
-    console.log("⚠️ nextId is 1 or less, using fallback scan");
+    console.log(" nextId is 1 or less, using fallback scan");
 
     // Fallback scan for the first few event slots when the next-id lookup fails.
     const MAX_FALLBACK_EVENTS = BigInt(100);
@@ -306,14 +306,14 @@ export const fetchOnChainEvents = async (senderAddress?: string | null): Promise
 
 export const fetchNextEventId = async (senderAddress?: string | null): Promise<bigint> => {
   const { contractAddress, contractName } = getContractParts();
-  console.log("🔍 fetchNextEventId - Contract parts:", { contractAddress, contractName });
+  console.log(" fetchNextEventId - Contract parts:", { contractAddress, contractName });
   
   if (!contractAddress || !contractName) {
-    console.warn("❌ Contract address or name missing");
+    console.warn(" Contract address or name missing");
     return 1n;
   }
   const resolvedSender = resolveSenderAddress(senderAddress, contractAddress);
-  console.log("📞 Calling get-next-event-id with sender:", resolvedSender);
+  console.log(" Calling get-next-event-id with sender:", resolvedSender);
 
   try {
     const nextIdValue = await fetchCallReadOnlyFunction({
@@ -325,18 +325,18 @@ export const fetchNextEventId = async (senderAddress?: string | null): Promise<b
       senderAddress: resolvedSender
     });
 
-    console.log("✅ get-next-event-id response:", nextIdValue);
+    console.log(" get-next-event-id response:", nextIdValue);
 
     if (nextIdValue.type === ClarityType.UInt) {
       const id = normalizeBigInt(nextIdValue.value);
-      console.log("📊 Next event ID:", id.toString());
+      console.log(" Next event ID:", id.toString());
       return id;
     }
 
-    console.warn("⚠️ Unexpected response type:", nextIdValue.type);
+    console.warn(" Unexpected response type:", nextIdValue.type);
     return 1n;
   } catch (error) {
-    console.error("❌ Unable to read next-event-id from contract:", error);
+    console.error(" Unable to read next-event-id from contract:", error);
     return 1n;
   }
 };
