@@ -24,7 +24,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
+import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, getContractParts } from "@/lib/stacks";
 import { EVENT_IMAGE_POOL, fetchNextEventId, fetchOnChainEvents, formatPriceFromMicroStx, type OnChainEvent } from "@/lib/events";
 import { addPendingEvent } from "@/lib/pending-events";
 import {
@@ -41,9 +41,9 @@ const MAX_IMAGE_SIZE_BYTES = 1_000_000;
 const PINATA_GATEWAY_URL =
   process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL ?? "https://gateway.pinata.cloud/ipfs/";
 
-const stacksTestnet = createNetwork({
-  network: "testnet",
-  client: { baseUrl: TESTNET_CORE_API }
+const stacksNetwork = createNetwork({
+  network: STACKS_NETWORK,
+  client: { baseUrl: CORE_API_BASE_URL }
 });
 
 type AttributeInput = {
@@ -349,7 +349,7 @@ export default function CreateEventPage() {
         ],
         userSession,
         appDetails: buildAppDetails(),
-        network: stacksTestnet,
+        network: stacksNetwork,
         onCancel: () => {
           setIsSubmitting(false);
           toast.info("Event creation was cancelled in the wallet.");

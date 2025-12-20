@@ -4,12 +4,28 @@ import { AppConfig, type AuthOptions } from "@stacks/connect";
 import { UserSession } from "@stacks/auth";
 import type { ConnectNetwork } from "@stacks/connect";
 
-export const TESTNET_CORE_API = "https://api.testnet.hiro.so";
+type StacksNetworkName = "mainnet" | "testnet" | "devnet" | "mocknet";
+
+const resolveStacksNetwork = (value: string | undefined): StacksNetworkName => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "mainnet") {
+    return "mainnet";
+  }
+  if (normalized === "testnet") {
+    return "testnet";
+  }
+  return "testnet";
+};
+
+export const STACKS_NETWORK = resolveStacksNetwork(process.env.NEXT_PUBLIC_STACKS_NETWORK);
+export const CORE_API_BASE_URL =
+  (process.env.NEXT_PUBLIC_STACKS_API_BASE_URL ?? "").trim() ||
+  (STACKS_NETWORK === "mainnet" ? "https://api.hiro.so" : "https://api.testnet.hiro.so");
 export const APP_NAME = "EventPass";
 export const APP_ICON_PATH = "/icon.svg";
 export const APP_MANIFEST_PATH = "/manifest.json";
 export const APP_SCOPES = ["store_write", "publish_data"];
-export const CONNECT_NETWORK: ConnectNetwork = "testnet";
+export const CONNECT_NETWORK: ConnectNetwork = STACKS_NETWORK as ConnectNetwork;
 
 export const CONTRACT_IDENTIFIER = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "").trim();
 
@@ -26,7 +42,7 @@ export const buildAppConfig = () =>
     resolveOrigin() || undefined,
     "/",
     APP_MANIFEST_PATH,
-    TESTNET_CORE_API
+    CORE_API_BASE_URL
   );
 
 export const createUserSession = () => new UserSession({ appConfig: buildAppConfig() });

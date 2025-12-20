@@ -13,7 +13,7 @@ import {
 } from "@stacks/transactions";
 import { createNetwork } from "@stacks/network";
 
-import { TESTNET_CORE_API, getContractParts } from "@/lib/stacks";
+import { CORE_API_BASE_URL, STACKS_NETWORK, getContractParts } from "@/lib/stacks";
 
 export const EVENT_IMAGE_POOL = [
   "/images/stacks-summit.svg",
@@ -24,7 +24,7 @@ export const EVENT_IMAGE_POOL = [
 
 export const MICROSTX = BigInt(1_000_000);
 
-const network = createNetwork({ network: "testnet", client: { baseUrl: TESTNET_CORE_API } });
+const network = createNetwork({ network: STACKS_NETWORK, client: { baseUrl: CORE_API_BASE_URL } });
 
 const DEFAULT_SENDER = "ST000000000000000000002AMW42H";
 

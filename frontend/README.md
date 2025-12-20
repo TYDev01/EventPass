@@ -47,7 +47,7 @@ The create-event form derives the contract address and name from this identifier
 
 The header’s **Connect Wallet** action authenticates with the Leather browser wallet using Stacks Connect. Signed-in addresses display inline, and users can disconnect to clear the session.
 
-- Network: the connector forces `network: "testnet"` and uses the Stacks testnet core API, so ensure the Leather extension is configured for testnet accounts.
+- Network: configure `NEXT_PUBLIC_STACKS_NETWORK` (`testnet` or `mainnet`) and `NEXT_PUBLIC_STACKS_API_BASE_URL` to align the app with your Leather wallet network.
 
 ## Create Flow
 
