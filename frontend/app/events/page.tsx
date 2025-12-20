@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BookmarkPlus,
+  Calendar as CalendarIcon,
   RefreshCcw,
   Search,
   Trash2
@@ -556,12 +557,20 @@ export default function EventsPage() {
                 Ongoing and available events.
               </p>
             </div>
-            <Button variant="ghost" className="gap-2" asChild>
-              <Link href="/create">
-                Create new event
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="ghost" className="gap-2" asChild>
+                <Link href="/calendar">
+                  Calendar view
+                  <CalendarIcon className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button variant="ghost" className="gap-2" asChild>
+                <Link href="/create">
+                  Create new event
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
           </div>
 
           <div className="rounded-[2rem] border border-white/60 bg-white/80 p-6 shadow-sm">
