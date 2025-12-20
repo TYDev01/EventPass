@@ -144,10 +144,11 @@ const buildPeakTimes = () => [
 
 export default function AnalyticsPage() {
   const searchParams = useSearchParams();
-  const { events, isLoading } = useEventCatalog();
+  const { events, isLoading, refresh } = useEventCatalog();
   const { address } = useStacks();
   const printRef = useRef<HTMLDivElement | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date());
+  const [liveEnabled, setLiveEnabled] = useState(true);
 
   const userEvents = useMemo(() => {
     if (!address) {
@@ -249,6 +250,16 @@ export default function AnalyticsPage() {
     setUpdatedAt(new Date());
   }, [events, selectedEventId]);
 
+  useEffect(() => {
+    if (!liveEnabled) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      refresh();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [liveEnabled, refresh]);
+
   const handleExportExcel = () => {
     if (!selectedEvent) {
       return;
@@ -346,6 +357,16 @@ export default function AnalyticsPage() {
                   <Zap className="h-3.5 w-3.5 text-primary" />
                   Live updates · {updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLiveEnabled((prev) => !prev)}
+                >
+                  {liveEnabled ? "Pause live" : "Resume live"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={refresh}>
+                  Refresh now
+                </Button>
                 <select
                   value={selectedEvent?.id ?? ""}
                   onChange={(event) => setSelectedEventId(Number(event.target.value))}
