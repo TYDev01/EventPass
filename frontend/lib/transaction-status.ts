@@ -60,7 +60,7 @@ export async function reconcilePendingWithTransaction(
   
   if (status.txStatus === "abort_by_response" || status.txStatus === "abort_by_post_condition") {
     // Transaction failed, should remove from pending
-    console.log(`❌ Transaction ${pendingTxId} failed - removing from pending`);
+    console.log(` Transaction ${pendingTxId} failed - removing from pending`);
     return { shouldRemove: true };
   }
   
