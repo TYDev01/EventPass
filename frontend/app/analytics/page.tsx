@@ -220,6 +220,25 @@ export default function AnalyticsPage() {
       .slice(0, 3);
   }, [events, selectedEvent]);
 
+  const comparisonSeries = useMemo(() => {
+    if (!selectedEvent || similarEvents.length === 0) {
+      return [];
+    }
+    const avgSold = Math.round(
+      similarEvents.reduce((sum, event) => sum + event.sold, 0) / similarEvents.length
+    );
+    const avgRevenue = Number(
+      (
+        similarEvents.reduce((sum, event) => sum + event.sold * parsePriceToStx(event), 0) /
+        similarEvents.length
+      ).toFixed(2)
+    );
+    return [
+      { label: "Your event", sold: selectedEvent.sold, revenue: totalRevenue },
+      { label: "Category avg", sold: avgSold, revenue: avgRevenue }
+    ];
+  }, [selectedEvent, similarEvents, totalRevenue]);
+
   const totalRevenue = selectedEvent
     ? Number((selectedEvent.sold * parsePriceToStx(selectedEvent)).toFixed(2))
     : 0;
@@ -597,6 +616,20 @@ export default function AnalyticsPage() {
                     ))
                   )}
                 </div>
+                {comparisonSeries.length > 0 ? (
+                  <div className="mt-4 h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={comparisonSeries} barSize={18}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="sold" name="Tickets sold" fill="#fb923c" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="revenue" name="Revenue (STX)" fill="#fdba74" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>
