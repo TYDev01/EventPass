@@ -69,12 +69,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
 
   const paymentAddress = contractAddress || event.creator || "";
   const paymentMemo = `EventPass ticket ${event.title}`.slice(0, 60);
-  const paymentUri = useMemo(() => {
-    if (!paymentAddress) {
-      return "";
-    }
-    return `stacks:${paymentAddress}?amount=${priceMicroStx.toString()}&memo=${encodeURIComponent(paymentMemo)}`;
-  }, [paymentAddress, paymentMemo, priceMicroStx]);
+  const paymentUri = paymentAddress;
 
   const handleBuyClick = useCallback(async () => {
     if (!isActive || isPending || isPurchasing || isSoldOut) {
@@ -301,6 +296,39 @@ export function EventCard({ event }: { event: EventPassEvent }) {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Memo</p>
                     <p className="font-medium text-foreground">{paymentMemo}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(paymentAddress);
+                          toast.success("Address copied to clipboard.");
+                        } catch (error) {
+                          console.error("Failed to copy address", error);
+                          toast.error("Unable to copy address.");
+                        }
+                      }}
+                      disabled={!paymentAddress}
+                    >
+                      Copy address
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(formattedPrice);
+                          toast.success("Amount copied to clipboard.");
+                        } catch (error) {
+                          console.error("Failed to copy amount", error);
+                          toast.error("Unable to copy amount.");
+                        }
+                      }}
+                    >
+                      Copy amount
+                    </Button>
                   </div>
                 </div>
               </div>
