@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EventImage } from "@/components/EventImage";
 import { TransferTicketDialog } from "@/components/TransferTicketDialog";
 import { useStacks } from "@/components/StacksProvider";
-import { TESTNET_CORE_API, getContractParts } from "@/lib/stacks";
+import { CORE_API_BASE_URL, STACKS_NETWORK, getContractParts } from "@/lib/stacks";
 import { fetchOnChainEvents, formatPriceFromMicroStx } from "@/lib/events";
 import type { OnChainEvent } from "@/lib/events";
 
@@ -25,13 +25,13 @@ type UserTicket = {
 };
 
 export default function MyTicketsPage() {
-  const { userSession } = useStacks();
+  const { userSession, address } = useStacks();
   const [tickets, setTickets] = useState<UserTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadUserTickets = async () => {
-    if (!userSession) {
+    if (!userSession || !address) {
       setIsLoading(false);
       return;
     }
@@ -40,7 +40,7 @@ export default function MyTicketsPage() {
       setIsLoading(true);
       setError(null);
 
-      const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
+      const userAddress = address;
       const { contractAddress, contractName } = getContractParts();
 
       if (!contractAddress || !contractName) {
@@ -57,7 +57,7 @@ export default function MyTicketsPage() {
       
       // For each event, check which seats the user owns
       const userTickets: UserTicket[] = [];
-      const network = createNetwork({ network: "testnet", client: { baseUrl: TESTNET_CORE_API } });
+      const network = createNetwork({ network: STACKS_NETWORK, client: { baseUrl: CORE_API_BASE_URL } });
 
       for (const event of events) {
         console.log(`🎫 Checking event ${event.id}: ${event.title} (${event.soldSeats} seats sold)`);

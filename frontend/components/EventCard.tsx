@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import type { EventPassEvent } from "@/lib/data";
 import { cn, summarizePrincipal } from "@/lib/utils";
 import { useStacks } from "@/components/StacksProvider";
-import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
+import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, extractAddress, getContractParts } from "@/lib/stacks";
 
 const statusStyles: Record<EventPassEvent["status"], string> = {
   Active: "text-primary bg-primary/10",
@@ -31,11 +31,11 @@ const statusStyles: Record<EventPassEvent["status"], string> = {
 
 export function EventCard({ event }: { event: EventPassEvent }) {
   const router = useRouter();
-  const { userSession, connect } = useStacks();
+  const { userSession, connect, address } = useStacks();
   const [{ contractAddress, contractName }] = useState(() => getContractParts());
   const contractConfigured = Boolean(contractAddress && contractName);
   const network = useMemo(
-    () => createNetwork({ network: "testnet", client: { baseUrl: TESTNET_CORE_API } }),
+    () => createNetwork({ network: STACKS_NETWORK, client: { baseUrl: CORE_API_BASE_URL } }),
     []
   );
 
@@ -77,12 +77,27 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     try {
       setIsPurchasing(true);
       
-      openContractCall({
+      // Create post-condition to allow STX transfer
+      const postConditions = [];
+      if (event.priceMicroStx && event.priceMicroStx > BigInt(0)) {
+        const userAddress = address ?? extractAddress(userSession.loadUserData());
+        if (!userAddress) {
+          console.warn("Unable to resolve user address for post condition.");
+          return;
+        }
+        postConditions.push(
+          Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
+        );
+      }
+      
+      await openContractCall({
         contractAddress,
         contractName,
         functionName: "purchase-ticket",
-        functionArgs: [uintCV(event.id), uintCV(seatNumber)],
-        postConditionMode: PostConditionMode.Allow,
+        functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))],
+        postConditions,
+        postConditionMode: PostConditionMode.Deny,
+        userSession,
         appDetails: buildAppDetails(),
         network,
         onCancel: () => {
@@ -120,7 +135,6 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     contractConfigured,
     contractName,
     event.id,
-    event.priceMicroStx,
     event.seats,
     event.sold,
     isActive,
@@ -208,20 +222,13 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             disabled={!isActive || isPending || isPurchasing || isSoldOut}
             onClick={handleBuyClick}
           >
-            {isPurchasing ? (
-              <>
-                <Wallet className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : isSoldOut ? (
-              "Sold Out"
-            ) : isPending ? (
-              "Pending confirmation"
-            ) : isActive ? (
-              `Buy Ticket • ${event.price}`
-            ) : (
-              "View Details"
-            )}
+            {isSoldOut
+              ? "Sold Out"
+              : isPending
+              ? "Pending confirmation"
+              : isActive
+              ? "Buy Ticket"
+              : "View Details"}
           </Button>
           {event.metadataUri ? (
             <Button

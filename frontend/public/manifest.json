@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#fc6432",
-  "description": "EventPass ticketing dApp targeting Stacks testnet via Leather wallet.",
+  "description": "EventPass ticketing dApp for Stacks via Leather wallet.",
   "icons": [
     {
       "src": "/icon.svg",

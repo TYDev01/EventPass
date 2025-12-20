@@ -10,11 +10,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
+import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, getContractParts } from "@/lib/stacks";
 
-const stacksTestnet = createNetwork({
-  network: "testnet",
-  client: { baseUrl: TESTNET_CORE_API }
+const stacksNetwork = createNetwork({
+  network: STACKS_NETWORK,
+  client: { baseUrl: CORE_API_BASE_URL }
 });
 
 
@@ -122,7 +122,7 @@ export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDia
       );
 
       openContractCall({
-        network: stacksTestnet,
+        network: stacksNetwork,
         appDetails: buildAppDetails(),
         contractAddress,
         contractName,
