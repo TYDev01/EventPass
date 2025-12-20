@@ -252,6 +252,18 @@ export default function AnalyticsPage() {
   }, [selectedEvent, similarEvents, totalRevenue]);
 
   const ticketsPerHour = selectedEvent ? Number((selectedEvent.sold / 72).toFixed(2)) : 0;
+  const avgTicketPrice = selectedEvent && selectedEvent.sold > 0
+    ? Number((totalRevenue / selectedEvent.sold).toFixed(2))
+    : 0;
+  const sellThrough = selectedEvent && selectedEvent.seats > 0
+    ? Math.min(100, Math.round((selectedEvent.sold / selectedEvent.seats) * 100))
+    : 0;
+
+  const topSalesDays = useMemo(() => {
+    return [...dailySeries]
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 4);
+  }, [dailySeries]);
 
   useEffect(() => {
     setUpdatedAt(new Date());
@@ -577,6 +589,50 @@ export default function AnalyticsPage() {
                       <Bar dataKey="value" fill="#fdba74" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="font-medium text-foreground">Revenue breakdown</span>
+                </div>
+                <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
+                    <span>Average ticket price</span>
+                    <span className="font-semibold text-foreground">{avgTicketPrice.toFixed(2)} STX</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
+                    <span>Sell-through rate</span>
+                    <span className="font-semibold text-foreground">{sellThrough}%</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
+                    <span>Remaining inventory</span>
+                    <span className="font-semibold text-foreground">
+                      {Math.max(0, (selectedEvent?.seats ?? 0) - (selectedEvent?.sold ?? 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <LineChart className="h-4 w-4" />
+                  <span className="font-medium text-foreground">Top sales days</span>
+                </div>
+                <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+                  {topSalesDays.length === 0 ? (
+                    <p>No sales recorded yet.</p>
+                  ) : (
+                    topSalesDays.map((item) => (
+                      <div key={item.date} className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
+                        <span>{item.date}</span>
+                        <span className="font-semibold text-foreground">{item.value} tickets</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
