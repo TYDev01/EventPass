@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -11,7 +11,8 @@ import {
   LineChart,
   Printer,
   Timer,
-  TrendingUp
+  TrendingUp,
+  Zap
 } from "lucide-react";
 import {
   Area,
@@ -80,6 +81,28 @@ const buildVelocitySeries = (event: EventPassEvent) => {
   });
 };
 
+const buildDailyDeltaSeries = (series: { date: string; sold: number }[]) => {
+  let last = 0;
+  return series.map((item) => {
+    const delta = Math.max(0, item.sold - last);
+    last = item.sold;
+    return { date: item.date, value: delta };
+  });
+};
+
+const buildWeeklySeries = (daily: { date: string; value: number }[]) => {
+  const weeks: { label: string; value: number }[] = [];
+  daily.forEach((item, index) => {
+    const weekIndex = Math.floor(index / 7);
+    const label = `Week ${weekIndex + 1}`;
+    if (!weeks[weekIndex]) {
+      weeks[weekIndex] = { label, value: 0 };
+    }
+    weeks[weekIndex].value += item.value;
+  });
+  return weeks;
+};
+
 const buildFunnelData = (event: EventPassEvent) => {
   const views = Math.max(event.sold * 12, 240);
   const addToCart = Math.round(views * 0.28);
@@ -95,6 +118,23 @@ const buildTierData = (event: EventPassEvent) => [
   { name: "Standard", value: Math.max(event.sold, 0) }
 ];
 
+const buildHeatmap = (event: EventPassEvent) => {
+  const grid = [];
+  const base = Math.max(event.sold, 1);
+  for (let day = 0; day < 7; day += 1) {
+    for (let slot = 0; slot < 6; slot += 1) {
+      const intensity = Math.min(1, (base / 120) * (0.4 + Math.sin((day + slot) * 0.6) * 0.3));
+      grid.push({
+        key: `${day}-${slot}`,
+        day,
+        slot,
+        value: Math.max(0.05, intensity)
+      });
+    }
+  }
+  return grid;
+};
+
 const buildPeakTimes = () => [
   { label: "Morning", value: 18 },
   { label: "Afternoon", value: 42 },
@@ -107,6 +147,7 @@ export default function AnalyticsPage() {
   const { events, isLoading } = useEventCatalog();
   const { address } = useStacks();
   const printRef = useRef<HTMLDivElement | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<Date>(new Date());
 
   const userEvents = useMemo(() => {
     if (!address) {
@@ -136,6 +177,9 @@ export default function AnalyticsPage() {
     return buildSalesSeries(selectedEvent);
   }, [selectedEvent]);
 
+  const dailySeries = useMemo(() => buildDailyDeltaSeries(salesSeries), [salesSeries]);
+  const weeklySeries = useMemo(() => buildWeeklySeries(dailySeries), [dailySeries]);
+
   const velocitySeries = useMemo(() => {
     if (!selectedEvent) {
       return [];
@@ -157,13 +201,34 @@ export default function AnalyticsPage() {
     return buildTierData(selectedEvent);
   }, [selectedEvent]);
 
+  const heatmapSeries = useMemo(() => {
+    if (!selectedEvent) {
+      return [];
+    }
+    return buildHeatmap(selectedEvent);
+  }, [selectedEvent]);
+
   const peakSeries = useMemo(() => buildPeakTimes(), []);
+
+  const similarEvents = useMemo(() => {
+    if (!selectedEvent) {
+      return [];
+    }
+    const category = selectedEvent.category ?? "General";
+    return events
+      .filter((event) => event.id !== selectedEvent.id && (event.category ?? "General") === category)
+      .slice(0, 3);
+  }, [events, selectedEvent]);
 
   const totalRevenue = selectedEvent
     ? Number((selectedEvent.sold * parsePriceToStx(selectedEvent)).toFixed(2))
     : 0;
 
   const ticketsPerHour = selectedEvent ? Number((selectedEvent.sold / 72).toFixed(2)) : 0;
+
+  useEffect(() => {
+    setUpdatedAt(new Date());
+  }, [events, selectedEventId]);
 
   const handleExportExcel = () => {
     if (!selectedEvent) {
@@ -258,6 +323,10 @@ export default function AnalyticsPage() {
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs text-muted-foreground">
+                  <Zap className="h-3.5 w-3.5 text-primary" />
+                  Live updates · {updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                </div>
                 <select
                   value={selectedEvent?.id ?? ""}
                   onChange={(event) => setSelectedEventId(Number(event.target.value))}
@@ -329,9 +398,11 @@ export default function AnalyticsPage() {
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip />
                       <Area type="monotone" dataKey="sold" stroke="#fc6432" fill="url(#salesGradient)" />
+                      <Area type="monotone" dataKey="revenue" stroke="#f97316" fillOpacity={0} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">Revenue line shows cumulative STX value.</p>
               </div>
 
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
@@ -397,6 +468,44 @@ export default function AnalyticsPage() {
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <BarChart3 className="h-4 w-4" />
+                  <span className="font-medium text-foreground">Daily sales</span>
+                </div>
+                <div className="mt-4 h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dailySeries}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#fb923c" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <BarChart3 className="h-4 w-4" />
+                  <span className="font-medium text-foreground">Weekly totals</span>
+                </div>
+                <div className="mt-4 h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={weeklySeries}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#fdba74" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <BarChart3 className="h-4 w-4" />
                   <span className="font-medium text-foreground">Conversion funnel</span>
                 </div>
                 <div className="mt-4 h-56">
@@ -442,6 +551,51 @@ export default function AnalyticsPage() {
                   <p className="text-xs text-muted-foreground">
                     Refund analytics will populate once refund events are indexed.
                   </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <LineChart className="h-4 w-4" />
+                  <span className="font-medium text-foreground">Purchase time heatmap</span>
+                </div>
+                <div className="mt-4 grid grid-cols-7 gap-2 text-[10px] text-muted-foreground">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                    <div key={day} className="text-center font-semibold">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-7 gap-2">
+                  {heatmapSeries.map((cell) => (
+                    <div
+                      key={cell.key}
+                      className="h-6 rounded"
+                      style={{ backgroundColor: `rgba(252, 100, 50, ${cell.value})` }}
+                    />
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">Heatmap represents estimated purchase clusters.</p>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="font-medium text-foreground">Similar events</span>
+                </div>
+                <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+                  {similarEvents.length === 0 ? (
+                    <p>No comparable events in this category yet.</p>
+                  ) : (
+                    similarEvents.map((event) => (
+                      <div key={event.id} className="rounded-lg border border-border/60 bg-white px-3 py-2">
+                        <p className="text-sm font-semibold text-foreground">{event.title}</p>
+                        <p className="text-xs text-muted-foreground">{event.location}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
