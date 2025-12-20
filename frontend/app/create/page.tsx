@@ -429,12 +429,28 @@ export default function CreateEventPage() {
                 className="glass-panel rounded-[2.5rem] border border-primary/20 bg-white/80 p-8 shadow-[0_50px_120px_-60px_rgba(252,100,50,0.25)]"
               >
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-semibold text-foreground">Your Events</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Select an event to send batch payments to workers.
-                    </p>
-                  </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-2xl font-semibold text-foreground">Your Events</h2>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!selectedEventId}
+                    onClick={() => {
+                      if (!selectedEventId) {
+                        return;
+                      }
+                      window.location.href = `/analytics?eventId=${selectedEventId}`;
+                    }}
+                  >
+                    Ticket Analytics
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Select an event to send batch payments to workers.
+                </p>
+              </div>
                   {isLoadingEvents ? (
                     <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
                       Loading your events...
