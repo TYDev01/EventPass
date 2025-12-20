@@ -211,6 +211,13 @@ export default function AnalyticsPage() {
 
   const peakSeries = useMemo(() => buildPeakTimes(), []);
 
+  const totalRevenue = useMemo(() => {
+    if (!selectedEvent) {
+      return 0;
+    }
+    return Number((selectedEvent.sold * parsePriceToStx(selectedEvent)).toFixed(2));
+  }, [selectedEvent]);
+
   const similarEvents = useMemo(() => {
     if (!selectedEvent) {
       return [];
@@ -240,10 +247,6 @@ export default function AnalyticsPage() {
     ];
   }, [selectedEvent, similarEvents, totalRevenue]);
 
-  const totalRevenue = selectedEvent
-    ? Number((selectedEvent.sold * parsePriceToStx(selectedEvent)).toFixed(2))
-    : 0;
-
   const ticketsPerHour = selectedEvent ? Number((selectedEvent.sold / 72).toFixed(2)) : 0;
 
   useEffect(() => {
@@ -265,8 +268,16 @@ export default function AnalyticsPage() {
       return;
     }
     const worksheet = XLSX.utils.json_to_sheet(salesSeries);
+    const dailyWorksheet = XLSX.utils.json_to_sheet(dailySeries);
+    const weeklyWorksheet = XLSX.utils.json_to_sheet(weeklySeries);
+    const velocityWorksheet = XLSX.utils.json_to_sheet(velocitySeries);
+    const funnelWorksheet = XLSX.utils.json_to_sheet(funnelSeries);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sales");
+    XLSX.utils.book_append_sheet(workbook, dailyWorksheet, "Daily Sales");
+    XLSX.utils.book_append_sheet(workbook, weeklyWorksheet, "Weekly Sales");
+    XLSX.utils.book_append_sheet(workbook, velocityWorksheet, "Velocity");
+    XLSX.utils.book_append_sheet(workbook, funnelWorksheet, "Funnel");
     XLSX.writeFile(workbook, `eventpass-${selectedEvent.id}-analytics.xlsx`);
   };
 
