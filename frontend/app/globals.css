@@ -22,20 +22,20 @@
 }
 
 .dark {
-  --background: 228 29% 7%;
-  --foreground: 210 17% 98%;
-  --card: 228 25% 10%;
-  --card-foreground: 210 17% 98%;
-  --muted: 228 20% 15%;
-  --muted-foreground: 228 12% 65%;
+  --background: 20 18% 8%;
+  --foreground: 24 16% 96%;
+  --card: 20 14% 9%;
+  --card-foreground: 24 16% 96%;
+  --muted: 20 12% 14%;
+  --muted-foreground: 24 10% 70%;
   --primary: 18 97% 57%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 228 20% 12%;
-  --secondary-foreground: 210 17% 98%;
+  --secondary: 20 14% 10%;
+  --secondary-foreground: 24 16% 96%;
   --accent: 18 97% 45%;
-  --accent-foreground: 210 17% 98%;
-  --border: 228 20% 18%;
-  --input: 228 20% 15%;
+  --accent-foreground: 24 16% 96%;
+  --border: 20 12% 18%;
+  --input: 20 12% 14%;
   --ring: 18 97% 57%;
 }
 
@@ -51,9 +51,9 @@ body {
 
 .dark body {
   background-image:
-    radial-gradient(55% 55% at 75% 10%, rgba(252, 100, 50, 0.15) 0%, rgba(252, 100, 50, 0) 70%),
-    radial-gradient(40% 40% at 15% 15%, rgba(252, 100, 50, 0.08) 0%, rgba(252, 100, 50, 0) 70%),
-    linear-gradient(180deg, hsl(228, 29%, 7%) 0%, hsl(228, 25%, 10%) 100%);
+    radial-gradient(55% 55% at 75% 10%, rgba(252, 100, 50, 0.18) 0%, rgba(252, 100, 50, 0) 70%),
+    radial-gradient(40% 40% at 15% 15%, rgba(252, 100, 50, 0.1) 0%, rgba(252, 100, 50, 0) 70%),
+    linear-gradient(180deg, hsl(20, 18%, 8%) 0%, hsl(20, 16%, 11%) 100%);
 }
 
 .glass-panel {
