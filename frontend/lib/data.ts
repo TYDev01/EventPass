@@ -3,6 +3,8 @@ export type EventPassEvent = {
   title: string;
   date: string;
   location: string;
+  category?: string;
+  tags?: string[];
   price: string;
   priceMicroStx?: bigint;
   status: "Active" | "Ended" | "Canceled" | "Pending";
@@ -22,6 +24,8 @@ export const events: EventPassEvent[] = [
     title: "Stacks Summit 2025",
     date: "June 21, 2025",
     location: "Miami, USA",
+    category: "Tech",
+    tags: ["Stacks", "Builders", "Conference"],
     price: "120 STX",
     status: "Active",
     seats: 250,
@@ -36,6 +40,8 @@ export const events: EventPassEvent[] = [
     title: "DeFi Horizons Live",
     date: "July 12, 2025",
     location: "Lisbon, Portugal",
+    category: "Tech",
+    tags: ["DeFi", "Workshops", "Networking"],
     price: "95 STX",
     status: "Active",
     seats: 180,
@@ -50,6 +56,8 @@ export const events: EventPassEvent[] = [
     title: "Metaverse Nights",
     date: "August 30, 2025",
     location: "Seoul, South Korea",
+    category: "Art",
+    tags: ["Immersive", "Performance", "Culture"],
     price: "150 STX",
     status: "Ended",
     seats: 320,
@@ -64,6 +72,8 @@ export const events: EventPassEvent[] = [
     title: "Creator Lab Pop-up",
     date: "September 18, 2025",
     location: "Berlin, Germany",
+    category: "Art",
+    tags: ["Creators", "Workshop", "Prototype"],
     price: "75 STX",
     status: "Canceled",
     seats: 120,
