@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEventCatalog } from "@/lib/useEventCatalog";
 import type { EventPassEvent } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 const PRESET_STORAGE_KEY = "eventpass.event-filter-presets";
 
@@ -280,7 +281,12 @@ const FilterChip = ({
     type="button"
     size="sm"
     variant={active ? "default" : "outline"}
-    className="rounded-full"
+    className={cn(
+      "rounded-full",
+      active
+        ? "dark:bg-primary dark:text-white"
+        : "dark:border-white/15 dark:bg-white/5 dark:text-white/70"
+    )}
     onClick={onClick}
   >
     {label}
@@ -573,7 +579,7 @@ export default function EventsPage() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-white/60 bg-white/80 p-6 shadow-sm">
+          <div className="rounded-[2rem] border border-white/60 bg-white/80 p-6 shadow-sm dark:border-white/10 dark:bg-[#1e1916]/80">
             <div className="flex flex-col gap-6">
               <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
                 <div className="relative">

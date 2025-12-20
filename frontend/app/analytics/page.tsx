@@ -349,13 +349,13 @@ export default function AnalyticsPage() {
 
       <Header />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-6 pb-24 pt-16">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-6 pb-20 pt-12">
         <Link href="/create" className="inline-flex w-fit items-center gap-2 text-sm text-muted-foreground transition hover:text-primary">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Back to create
         </Link>
 
-        <section className="glass-panel rounded-[2.5rem] border border-white/50 bg-white/70 p-10 shadow-[0_50px_120px_-60px_rgba(36,17,0,0.65)]">
+        <section className="glass-panel rounded-[2.5rem] border border-white/50 bg-white/70 p-8 shadow-[0_50px_120px_-60px_rgba(36,17,0,0.65)]">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div className="space-y-3">
               <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-primary">
@@ -395,7 +395,7 @@ export default function AnalyticsPage() {
             </Button>
           </div>
         ) : (
-          <section ref={printRef} className="space-y-8">
+          <section ref={printRef} className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Active event</p>
@@ -438,7 +438,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
@@ -469,7 +469,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)]">
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <LineChart className="h-4 w-4" />
@@ -517,7 +517,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-2">
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <TrendingUp className="h-4 w-4" />
@@ -555,7 +555,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-2">
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <BarChart3 className="h-4 w-4" />
@@ -593,7 +593,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-2">
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <TrendingUp className="h-4 w-4" />
@@ -637,7 +637,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-2">
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <BarChart3 className="h-4 w-4" />

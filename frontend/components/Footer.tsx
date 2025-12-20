@@ -18,10 +18,10 @@ export function Footer() {
       whileInView={{ opacity: 1 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.6 }}
-      className="mt-24 border-t border-white/50 bg-white/40"
+      className="mt-24 border-t border-transparent bg-[linear-gradient(180deg,rgba(246,199,182,0)_0%,#f6c7b6_45%,#f1ad97_100%)] dark:!bg-[#201a17] dark:bg-none"
     >
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-6 py-10 text-center text-sm text-muted-foreground">
-        <div className="flex items-center gap-2 text-foreground">
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-6 py-10 text-center text-sm text-[#1e1916] dark:text-white/80">
+        <div className="flex items-center gap-2 text-[#1e1916] dark:text-white">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
             EP
           </span>
@@ -36,7 +36,7 @@ export function Footer() {
             <Link
               key={label}
               href={href}
-              className="rounded-full bg-white/70 p-2 text-foreground/70 transition hover:text-primary"
+              className="rounded-full bg-white/10 p-2 text-white/70 transition hover:text-primary"
             >
               <span className="sr-only">{label}</span>
               <Icon className="h-5 w-5" aria-hidden="true" />
