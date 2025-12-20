@@ -77,23 +77,12 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     try {
       setIsPurchasing(true);
       
-      // Create post-condition to allow STX transfer
-      const postConditions = [];
-      if (event.priceMicroStx && event.priceMicroStx > BigInt(0)) {
-        const userAddress = userSession.loadUserData().profile.stxAddress.testnet;
-        postConditions.push(
-          Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
-        );
-      }
-      
-      await openContractCall({
+      openContractCall({
         contractAddress,
         contractName,
         functionName: "purchase-ticket",
-        functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))],
-        postConditions,
-        postConditionMode: PostConditionMode.Deny,
-        userSession,
+        functionArgs: [uintCV(event.id), uintCV(seatNumber)],
+        postConditionMode: PostConditionMode.Allow,
         appDetails: buildAppDetails(),
         network,
         onCancel: () => {
@@ -131,6 +120,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     contractConfigured,
     contractName,
     event.id,
+    event.priceMicroStx,
     event.seats,
     event.sold,
     isActive,
@@ -218,13 +208,20 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             disabled={!isActive || isPending || isPurchasing || isSoldOut}
             onClick={handleBuyClick}
           >
-            {isSoldOut
-              ? "Sold Out"
-              : isPending
-              ? "Pending confirmation"
-              : isActive
-              ? "Buy Ticket"
-              : "View Details"}
+            {isPurchasing ? (
+              <>
+                <Wallet className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : isSoldOut ? (
+              "Sold Out"
+            ) : isPending ? (
+              "Pending confirmation"
+            ) : isActive ? (
+              `Buy Ticket • ${event.price}`
+            ) : (
+              "View Details"
+            )}
           </Button>
           {event.metadataUri ? (
             <Button
