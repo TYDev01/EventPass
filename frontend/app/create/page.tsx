@@ -237,6 +237,11 @@ export default function CreateEventPage() {
       return;
     }
 
+    if (!date) {
+      toast.error("Please select an event date.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       toast.info("Review and confirm the transaction in your Leather wallet to publish the event.");
