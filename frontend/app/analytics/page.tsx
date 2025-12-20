@@ -40,6 +40,8 @@ import { useEventCatalog } from "@/lib/useEventCatalog";
 import { useStacks } from "@/components/StacksProvider";
 import type { EventPassEvent } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import { getChainhookClient } from "@/lib/chainhook-client";
+import { getContractParts } from "@/lib/stacks";
 
 const FALLBACK_WINDOW_DAYS = 14;
 
@@ -146,6 +148,8 @@ export default function AnalyticsPage() {
   const searchParams = useSearchParams();
   const { events, isLoading, refresh } = useEventCatalog();
   const { address } = useStacks();
+  const [{ contractAddress, contractName }] = useState(() => getContractParts());
+  const contractConfigured = Boolean(contractAddress && contractName);
   const printRef = useRef<HTMLDivElement | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date());
   const [liveEnabled, setLiveEnabled] = useState(true);
@@ -262,6 +266,30 @@ export default function AnalyticsPage() {
     }, 15000);
     return () => window.clearInterval(interval);
   }, [liveEnabled, refresh]);
+
+  useEffect(() => {
+    if (!liveEnabled || !contractConfigured) {
+      return;
+    }
+    const client = getChainhookClient(contractAddress, contractName);
+    const handler = (event: { eventId?: number | string }) => {
+      if (!selectedEvent) {
+        return;
+      }
+      const eventId = Number(event.eventId);
+      if (!Number.isFinite(eventId) || eventId !== selectedEvent.id) {
+        return;
+      }
+      refresh();
+      setUpdatedAt(new Date());
+    };
+    const unsubscribeCreated = client.on("event-created", handler);
+    const unsubscribePurchased = client.on("ticket-purchased", handler);
+    return () => {
+      unsubscribeCreated();
+      unsubscribePurchased();
+    };
+  }, [contractConfigured, contractAddress, contractName, liveEnabled, refresh, selectedEvent]);
 
   const handleExportExcel = () => {
     if (!selectedEvent) {
