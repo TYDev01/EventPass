@@ -14,6 +14,7 @@ import {
 } from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { QRCodeCanvas } from "qrcode.react";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ import type { EventPassEvent } from "@/lib/data";
 import { cn, summarizePrincipal } from "@/lib/utils";
 import { useStacks } from "@/components/StacksProvider";
 import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, extractAddress, getContractParts } from "@/lib/stacks";
+import { formatPriceFromMicroStx } from "@/lib/events";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const statusStyles: Record<EventPassEvent["status"], string> = {
   Active: "text-primary bg-primary/10",
@@ -44,6 +47,34 @@ export function EventCard({ event }: { event: EventPassEvent }) {
   const isOnChain = Boolean(event.isOnChain);
   const isSoldOut = isActive && event.sold >= event.seats;
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+
+  const priceMicroStx = useMemo(() => {
+    if (event.priceMicroStx !== undefined) {
+      return event.priceMicroStx;
+    }
+    const parsed = Number.parseFloat(event.price.replace(/[^0-9.]/g, ""));
+    if (Number.isNaN(parsed)) {
+      return BigInt(0);
+    }
+    return BigInt(Math.round(parsed * 1_000_000));
+  }, [event.price, event.priceMicroStx]);
+
+  const formattedPrice = useMemo(() => {
+    if (event.priceMicroStx !== undefined) {
+      return formatPriceFromMicroStx(event.priceMicroStx);
+    }
+    return event.price;
+  }, [event.price, event.priceMicroStx]);
+
+  const paymentAddress = contractAddress || event.creator || "";
+  const paymentMemo = `EventPass ticket ${event.title}`.slice(0, 60);
+  const paymentUri = useMemo(() => {
+    if (!paymentAddress) {
+      return "";
+    }
+    return `stacks:${paymentAddress}?amount=${priceMicroStx.toString()}&memo=${encodeURIComponent(paymentMemo)}`;
+  }, [paymentAddress, paymentMemo, priceMicroStx]);
 
   const handleBuyClick = useCallback(async () => {
     if (!isActive || isPending || isPurchasing || isSoldOut) {
@@ -220,7 +251,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
             className="w-full"
             variant={isActive && !isSoldOut ? "default" : "outline"}
             disabled={!isActive || isPending || isPurchasing || isSoldOut}
-            onClick={handleBuyClick}
+            onClick={() => setIsPaymentOpen(true)}
           >
             {isSoldOut
               ? "Sold Out"
@@ -242,6 +273,56 @@ export function EventCard({ event }: { event: EventPassEvent }) {
               </a>
             </Button>
           ) : null}
+          <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Pay for your ticket</DialogTitle>
+                <DialogDescription>
+                  Scan the QR code to send the ticket price, or continue in your wallet to mint the ticket on-chain.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-6 md:grid-cols-[auto_minmax(0,1fr)]">
+                <div className="flex items-center justify-center rounded-xl border border-border bg-white p-4">
+                  {paymentUri ? (
+                    <QRCodeCanvas value={paymentUri} size={180} includeMargin />
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Contract address unavailable.</div>
+                  )}
+                </div>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Send to</p>
+                    <p className="font-medium text-foreground break-all">{paymentAddress || "Not available"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Amount</p>
+                    <p className="font-medium text-foreground">{formattedPrice}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Memo</p>
+                    <p className="font-medium text-foreground">{paymentMemo}</p>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPaymentOpen(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsPaymentOpen(false);
+                    void handleBuyClick();
+                  }}
+                  disabled={isPurchasing || !isActive || isSoldOut}
+                >
+                  Continue in wallet
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardFooter>
       </Card>
     </motion.div>
