@@ -25,7 +25,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { TESTNET_CORE_API, buildAppDetails, getContractParts } from "@/lib/stacks";
-import { EVENT_IMAGE_POOL, fetchNextEventId, fetchOnChainEvents, formatPriceFromMicroStx, type OnChainEvent } from "@/lib/events";
+import { EVENT_IMAGE_POOL, fetchNextEventId, formatPriceFromMicroStx } from "@/lib/events";
+import { useEventCatalog } from "@/lib/useEventCatalog";
+import type { EventPassEvent } from "@/lib/data";
 import { addPendingEvent } from "@/lib/pending-events";
 import {
   canCreateEventToday,
@@ -69,9 +71,11 @@ export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchPaymentOpen, setIsBatchPaymentOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
-  const [userEvents, setUserEvents] = useState<OnChainEvent[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
+  
+  // Get events from catalog (includes metadata like location)
+  const { events: allEvents, isLoading: isLoadingEvents } = useEventCatalog();
+  const userEvents = allEvents.filter(event => event.creator === address && event.isOnChain);
 
   const formatDuration = (millis: number) => {
     const totalSeconds = Math.ceil(millis / 1000);
@@ -82,29 +86,6 @@ export default function CreateEventPage() {
     }
     return `${Math.max(minutes, 1)}m`;
   };
-
-  // Fetch user's created events
-  useEffect(() => {
-    if (!address) {
-      setUserEvents([]);
-      return;
-    }
-
-    const loadUserEvents = async () => {
-      setIsLoadingEvents(true);
-      try {
-        const allEvents = await fetchOnChainEvents(address);
-        const myEvents = allEvents.filter(event => event.creator === address);
-        setUserEvents(myEvents);
-      } catch (error) {
-        console.error("Failed to load user events:", error);
-      } finally {
-        setIsLoadingEvents(false);
-      }
-    };
-
-    loadUserEvents();
-  }, [address]);
 
   const resetForm = () => {
     setTitle("");
@@ -449,11 +430,15 @@ export default function CreateEventPage() {
                                   {event.date}
                                 </span>
                                 <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {event.location}
+                                </span>
+                                <span className="flex items-center gap-1">
                                   <Ticket className="h-3 w-3" />
-                                  {event.soldSeats}/{event.totalSeats} sold
+                                  {event.sold}/{event.seats} sold
                                 </span>
                                 <span className="font-medium text-primary">
-                                  {formatPriceFromMicroStx(event.priceMicroStx)}
+                                  {event.price}
                                 </span>
                               </div>
                             </div>
