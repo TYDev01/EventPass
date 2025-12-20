@@ -573,13 +573,14 @@ export default function EventsPage() {
                     value={filters.searchText}
                     onChange={(event) => updateFilters({ searchText: event.target.value })}
                     placeholder="Search by title, description, or creator"
-                    className="pl-9"
+                    className="border-primary/20 pl-9"
                   />
                 </div>
                 <Input
                   value={filters.location}
                   onChange={(event) => updateFilters({ location: event.target.value })}
                   placeholder="Filter by location or venue"
+                  className="border-primary/20"
                 />
               </div>
 
