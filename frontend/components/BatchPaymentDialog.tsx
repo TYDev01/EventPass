@@ -2,21 +2,14 @@
 
 import { useState } from "react";
 import { X, Plus, Trash2, Send, Loader2 } from "lucide-react";
-import { openContractCall } from "@stacks/connect";
-import { createNetwork } from "@stacks/network";
-import { uintCV, listCV, principalCV, PostConditionMode } from "@stacks/transactions";
+import { uintCV, listCV, principalCV } from "@stacks/transactions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, getContractParts } from "@/lib/stacks";
-
-const stacksNetwork = createNetwork({
-  network: STACKS_NETWORK,
-  client: { baseUrl: CORE_API_BASE_URL }
-});
-
+import { getContractParts } from "@/lib/stacks";
+import { useStacks } from "@/components/StacksProvider";
 
 interface Recipient {
   id: string;
@@ -38,6 +31,7 @@ interface BatchPaymentDialogProps {
 }
 
 export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDialogProps) {
+  const { session, connect, callContract } = useStacks();
   const [recipients, setRecipients] = useState<Recipient[]>([
     { id: "1", address: "", amount: "" }
   ]);
@@ -104,6 +98,12 @@ export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDia
       return;
     }
 
+    if (!session) {
+      toast.info("Connect your wallet to send batch payments.");
+      connect();
+      return;
+    }
+
     // Calculate total
     const totalSTX = validRecipients.reduce(
       (sum, r) => sum + parseFloat(r.amount),
@@ -121,9 +121,7 @@ export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDia
         uintCV(Math.floor(parseFloat(r.amount) * 1_000_000))
       );
 
-      openContractCall({
-        network: stacksNetwork,
-        appDetails: buildAppDetails(),
+      const result = await callContract({
         contractAddress,
         contractName,
         functionName: "batch-pay",
@@ -131,21 +129,15 @@ export function BatchPaymentDialog({ isOpen, onClose, eventId }: BatchPaymentDia
           uintCV(eventId),
           listCV(recipientPrincipals),
           listCV(amountsInMicroSTX)
-        ],
-        postConditionMode: PostConditionMode.Allow,
-        onFinish: (data) => {
-          console.log("Batch payment transaction:", data);
-          toast.success(
-            `Batch payment submitted! Total: ${totalSTX.toFixed(6)} STX to ${validRecipients.length} recipients`
-          );
-          setRecipients([{ id: "1", address: "", amount: "" }]);
-          onClose();
-        },
-        onCancel: () => {
-          console.log("Transaction cancelled");
-          toast.info("Batch payment cancelled");
-        }
+        ]
       });
+
+      console.log("Batch payment transaction:", result);
+      toast.success(
+        `Batch payment submitted! Total: ${totalSTX.toFixed(6)} STX to ${validRecipients.length} recipients`
+      );
+      setRecipients([{ id: "1", address: "", amount: "" }]);
+      onClose();
     } catch (error) {
       console.error("Error submitting batch payment:", error);
       toast.error("Failed to submit batch payment");

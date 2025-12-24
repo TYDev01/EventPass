@@ -4,14 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { openContractCall } from "@stacks/connect";
-import { createNetwork } from "@stacks/network";
-import { 
-  uintCV, 
-  PostConditionMode, 
-  FungibleConditionCode,
-  Pc
-} from "@stacks/transactions";
+import { uintCV } from "@stacks/transactions";
 import { CalendarDays, MapPin, Ticket, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { QRCodeCanvas } from "qrcode.react";
@@ -21,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { EventPassEvent } from "@/lib/data";
 import { cn, summarizePrincipal } from "@/lib/utils";
 import { useStacks } from "@/components/StacksProvider";
-import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, extractAddress, getContractParts } from "@/lib/stacks";
+import { getContractParts } from "@/lib/stacks";
 import { formatPriceFromMicroStx } from "@/lib/events";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -34,13 +27,9 @@ const statusStyles: Record<EventPassEvent["status"], string> = {
 
 export function EventCard({ event }: { event: EventPassEvent }) {
   const router = useRouter();
-  const { userSession, connect, address } = useStacks();
+  const { session, connect, callContract } = useStacks();
   const [{ contractAddress, contractName }] = useState(() => getContractParts());
   const contractConfigured = Boolean(contractAddress && contractName);
-  const network = useMemo(
-    () => createNetwork({ network: STACKS_NETWORK, client: { baseUrl: CORE_API_BASE_URL } }),
-    []
-  );
 
   const isActive = event.status === "Active";
   const isPending = event.status === "Pending";
@@ -86,7 +75,7 @@ export function EventCard({ event }: { event: EventPassEvent }) {
       return;
     }
 
-    if (!userSession) {
+    if (!session) {
       connect();
       return;
     }
@@ -103,48 +92,25 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     try {
       setIsPurchasing(true);
       
-      // Create post-condition to allow STX transfer
-      const postConditions = [];
-      if (event.priceMicroStx && event.priceMicroStx > BigInt(0)) {
-        const userAddress = address ?? extractAddress(userSession.loadUserData());
-        if (!userAddress) {
-          console.warn("Unable to resolve user address for post condition.");
-          return;
-        }
-        postConditions.push(
-          Pc.principal(userAddress).willSendLte(event.priceMicroStx).ustx()
-        );
-      }
-      
-      await openContractCall({
+      const result = await callContract({
         contractAddress,
         contractName,
         functionName: "purchase-ticket",
-        functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))],
-        postConditions,
-        postConditionMode: PostConditionMode.Deny,
-        userSession,
-        appDetails: buildAppDetails(),
-        network,
-        onCancel: () => {
-          setIsPurchasing(false);
-          toast.info("Purchase cancelled");
-        },
-        onFinish: (data) => {
-          setIsPurchasing(false);
-          if (data.txId) {
-            toast.success(
-              `Ticket purchase submitted! Transaction ID: ${data.txId.slice(0, 8)}...`,
-              {
-                description: "Your ticket will be minted once the transaction confirms.",
-                duration: 6000
-              }
-            );
-          } else {
-            toast.success("Ticket purchase submitted!");
-          }
-        }
+        functionArgs: [uintCV(BigInt(event.id)), uintCV(BigInt(seatNumber))]
       });
+
+      setIsPurchasing(false);
+      if (result?.txid) {
+        toast.success(
+          `Ticket purchase submitted! Transaction ID: ${result.txid.slice(0, 8)}...`,
+          {
+            description: "Your ticket will be minted once the transaction confirms.",
+            duration: 6000
+          }
+        );
+      } else {
+        toast.success("Ticket purchase submitted!");
+      }
     } catch (error) {
       console.error("Unable to start ticket purchase", error);
       toast.error(
@@ -168,9 +134,9 @@ export function EventCard({ event }: { event: EventPassEvent }) {
     isPending,
     isPurchasing,
     isSoldOut,
-    network,
     router,
-    userSession
+    session,
+    callContract
   ]);
 
   return (

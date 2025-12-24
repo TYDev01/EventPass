@@ -4,8 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { format } from "date-fns";
-import { openContractCall } from "@stacks/connect";
-import { createNetwork } from "@stacks/network";
 import { stringAsciiCV, uintCV } from "@stacks/transactions";
 import { ArrowLeft, Calendar as CalendarIcon, MapPin, Plus, Ticket, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +22,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CORE_API_BASE_URL, STACKS_NETWORK, buildAppDetails, getContractParts } from "@/lib/stacks";
+import { getContractParts } from "@/lib/stacks";
 import { EVENT_IMAGE_POOL, fetchNextEventId, fetchOnChainEvents, formatPriceFromMicroStx, type OnChainEvent } from "@/lib/events";
 import { addPendingEvent } from "@/lib/pending-events";
 import {
@@ -41,18 +39,13 @@ const MAX_IMAGE_SIZE_BYTES = 1_000_000;
 const PINATA_GATEWAY_URL =
   process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL ?? "https://gateway.pinata.cloud/ipfs/";
 
-const stacksNetwork = createNetwork({
-  network: STACKS_NETWORK,
-  client: { baseUrl: CORE_API_BASE_URL }
-});
-
 type AttributeInput = {
   traitType: string;
   value: string;
 };
 
 export default function CreateEventPage() {
-  const { address, userSession, connect, refreshSession } = useStacks();
+  const { address, session, connect, refreshSession, callContract } = useStacks();
   const { contractAddress, contractName } = useMemo(() => getContractParts(), []);
   const contractConfigured = Boolean(contractAddress && contractName);
 
@@ -175,8 +168,8 @@ export default function CreateEventPage() {
       return false;
     }
 
-    if (!address || !userSession) {
-      toast.info("Connect your Leather wallet to create a new event.");
+    if (!address || !session) {
+      toast.info("Connect your wallet to create a new event.");
       connect();
       return false;
     }
@@ -247,7 +240,7 @@ export default function CreateEventPage() {
       return;
     }
 
-    if (!userSession || !contractAddress || !contractName) {
+    if (!session || !contractAddress || !contractName) {
       return;
     }
 
@@ -258,7 +251,7 @@ export default function CreateEventPage() {
 
     try {
       setIsSubmitting(true);
-      toast.info("Review and confirm the transaction in your Leather wallet to publish the event.");
+      toast.info("Review and confirm the transaction in your wallet to publish the event.");
 
       const trimmedTitle = title.trim();
       const trimmedDate = format(date, "MMMM d, yyyy");
@@ -355,7 +348,7 @@ export default function CreateEventPage() {
       const metadataCid = metadataData.cid as string;
       const metadataUri = `${PINATA_GATEWAY_URL}${metadataCid}`;
 
-      await openContractCall({
+      const payload = await callContract({
         contractAddress,
         contractName,
         functionName: "create-event",
@@ -365,41 +358,37 @@ export default function CreateEventPage() {
           uintCV(priceInMicroStx),
           uintCV(seatsValue),
           stringAsciiCV(metadataUri.slice(0, MAX_METADATA_URI_LENGTH))
-        ],
-        userSession,
-        appDetails: buildAppDetails(),
-        network: stacksNetwork,
-        onCancel: () => {
-          setIsSubmitting(false);
-          toast.info("Event creation was cancelled in the wallet.");
-        },
-        onFinish: (payload) => {
-          setIsSubmitting(false);
-          addPendingEvent({
-            txId: payload.txId,
-            title: trimmedTitle,
-            date: trimmedDate,
-            priceMicroStx: priceInMicroStx.toString(),
-            totalSeats: numericSeats,
-            creator: address ?? "",
-            createdAt: Date.now(),
-            imageIndex,
-            expectedEventId,
-            metadataUri
-          });
-          recordEventCreation(address);
-          toast.success(`Event creation submitted! Track status via tx ${payload.txId}. Your listing will appear once the transaction confirms.`);
-          resetForm();
-          void refreshSession();
-        }
+        ]
       });
+
+      setIsSubmitting(false);
+      addPendingEvent({
+        txId: payload?.txid ?? "",
+        title: trimmedTitle,
+        date: trimmedDate,
+        priceMicroStx: priceInMicroStx.toString(),
+        totalSeats: numericSeats,
+        creator: address ?? "",
+        createdAt: Date.now(),
+        imageIndex,
+        expectedEventId,
+        metadataUri
+      });
+      recordEventCreation(address);
+      if (payload?.txid) {
+        toast.success(`Event creation submitted! Track status via tx ${payload.txid}. Your listing will appear once the transaction confirms.`);
+      } else {
+        toast.success("Event creation submitted! Your listing will appear once the transaction confirms.");
+      }
+      resetForm();
+      void refreshSession();
     } catch (error) {
       console.error("Failed to initiate event creation", error);
       setIsSubmitting(false);
       toast.error(
         error instanceof Error
           ? error.message
-          : "Something went wrong while opening the Leather transaction modal."
+          : "Something went wrong while submitting the transaction."
       );
     }
   };
@@ -583,7 +572,7 @@ export default function CreateEventPage() {
               <h1 className="text-3xl font-semibold text-foreground">Launch a new on-chain event</h1>
               <p className="max-w-2xl text-sm text-muted-foreground">
                 Define the public metadata and ticket supply for your EventPass experience. You will review and sign the
-                resulting contract call in your Leather wallet.
+                resulting contract call in your wallet.
               </p>
             </div>
           </div>
