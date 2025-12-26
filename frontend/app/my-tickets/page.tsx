@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowLeft, Ticket as TicketIcon, RefreshCcw } from "lucide-react";
-import { fetchCallReadOnlyFunction, cvToValue, uintCV, ClarityType } from "@stacks/transactions";
+import {
+  fetchCallReadOnlyFunction,
+  cvToValue,
+  standardPrincipalCV,
+  ClarityType
+} from "@stacks/transactions";
 import { createNetwork } from "@stacks/network";
 
 import { Header } from "@/components/Header";
@@ -15,7 +20,7 @@ import { EventImage } from "@/components/EventImage";
 import { TransferTicketDialog } from "@/components/TransferTicketDialog";
 import { useStacks } from "@/components/StacksProvider";
 import { CORE_API_BASE_URL, STACKS_NETWORK, getContractParts } from "@/lib/stacks";
-import { fetchOnChainEvents, formatPriceFromMicroStx } from "@/lib/events";
+import { fetchEventById, formatPriceFromMicroStx } from "@/lib/events";
 import type { OnChainEvent } from "@/lib/events";
 
 type UserTicket = {
@@ -49,89 +54,66 @@ export default function MyTicketsPage() {
         return;
       }
 
-      // Fetch all events
-      const events = await fetchOnChainEvents(userAddress);
-      
-      console.log(" Checking tickets for user:", userAddress);
-      console.log(" Found events:", events.length);
-      
-      // For each event, check which seats the user owns
-      const userTickets: UserTicket[] = [];
       const network = createNetwork({ network: STACKS_NETWORK, client: { baseUrl: CORE_API_BASE_URL } });
 
-      for (const event of events) {
-        console.log(` Checking event ${event.id}: ${event.title} (${event.soldSeats} seats sold)`);
-        
-        // Only check seats that have been sold
-        if (event.soldSeats === 0) {
-          continue;
-        }
-        
-        // Check each sold seat
-        for (let seat = 1; seat <= event.soldSeats; seat++) {
-          try {
-            const response = await fetchCallReadOnlyFunction({
-              contractAddress,
-              contractName,
-              functionName: "get-ticket-metadata",
-              functionArgs: [uintCV(event.id), uintCV(seat)],
-              network,
-              senderAddress: userAddress
-            });
+      const ownerTicketsResponse = await fetchCallReadOnlyFunction({
+        contractAddress,
+        contractName,
+        functionName: "get-owner-tickets",
+        functionArgs: [standardPrincipalCV(userAddress)],
+        network,
+        senderAddress: userAddress
+      });
 
-            console.log(`  Seat ${seat} response:`, response);
-            console.log(`  Seat ${seat} response type:`, response.type);
-
-            // The response is (ok {event-id, seat, owner}) or an error
-            if (response.type === ClarityType.ResponseOk) {
-              const okValue = (response as any).value;
-              console.log(`  Seat ${seat} ok value:`, okValue);
-              
-              // okValue should be a tuple with event-id, seat, and owner
-              if (okValue && okValue.type === ClarityType.Tuple) {
-                // Access the tuple data
-                const tupleData = (okValue as any).data || (okValue as any).value;
-                console.log(`  Seat ${seat} tuple data:`, tupleData);
-                
-                if (tupleData && 'owner' in tupleData) {
-                  const ownerField = tupleData.owner;
-                  console.log(`  Seat ${seat} owner field:`, ownerField);
-                  
-                  // Extract the owner address
-                  let owner = '';
-                  if (typeof ownerField === 'string') {
-                    owner = ownerField;
-                  } else if (ownerField && typeof ownerField === 'object' && 'value' in ownerField) {
-                    owner = String(ownerField.value);
-                  } else {
-                    owner = String(ownerField);
-                  }
-                  
-                  console.log(`  Seat ${seat} owner address: ${owner}`);
-                  console.log(`  User address: ${userAddress}`);
-                  console.log(`  Match: ${owner === userAddress}`);
-                  
-                  if (owner === userAddress) {
-                    console.log(`   User owns seat ${seat}!`);
-                    userTickets.push({
-                      eventId: event.id,
-                      seat,
-                      event
-                    });
-                  }
-                }
-              }
-            } else {
-              console.log(`   Seat ${seat} not an ok response, type: ${response.type}`);
-            }
-          } catch (err) {
-            console.log(`   Error checking seat ${seat}:`, err);
-            continue;
-          }
-        }
+      if (ownerTicketsResponse.type !== ClarityType.ResponseOk) {
+        console.warn("Unable to read owner tickets", ownerTicketsResponse);
+        setTickets([]);
+        setIsLoading(false);
+        return;
       }
 
-      console.log(" Total tickets found:", userTickets.length);
+      const ownerTicketsValue = (ownerTicketsResponse as any).value;
+      const parsedTickets = cvToValue(ownerTicketsValue) as Array<{ "event-id": bigint; seat: bigint }>;
+      const ticketEntries = Array.isArray(parsedTickets) ? parsedTickets : [];
+
+      const uniqueEventIds = Array.from(
+        new Set(ticketEntries.map((entry) => Number(entry["event-id"])))
+      ).filter((id) => Number.isFinite(id) && id > 0);
+
+      const eventPairs = await Promise.all(
+        uniqueEventIds.map(async (eventId) => {
+          const event = await fetchEventById(
+            contractAddress,
+            contractName,
+            userAddress,
+            BigInt(eventId)
+          );
+          return event ? [eventId, event] : null;
+        })
+      );
+
+      const eventMap = new Map<number, OnChainEvent>();
+      eventPairs.forEach((pair) => {
+        if (pair) {
+          eventMap.set(pair[0], pair[1]);
+        }
+      });
+
+      const userTickets = ticketEntries
+        .map((entry) => {
+          const eventId = Number(entry["event-id"]);
+          const seat = Number(entry.seat);
+          const event = eventMap.get(eventId);
+          if (!event || !Number.isFinite(seat)) {
+            return null;
+          }
+          return {
+            eventId,
+            seat,
+            event
+          };
+        })
+        .filter((entry): entry is UserTicket => Boolean(entry));
 
       setTickets(userTickets);
       setIsLoading(false);
