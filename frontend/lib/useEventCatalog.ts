@@ -236,7 +236,7 @@ const reconcilePendingRecords = async (
         return false;
       }
 
-      console.log(`⏳ Keeping pending event: ${pending.title}`, {
+      console.log(` Keeping pending event: ${pending.title}`, {
         expectedId: pending.expectedEventId,
         txId: pending.txId,
         pendingSignature: signature,
