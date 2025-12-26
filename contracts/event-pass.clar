@@ -17,6 +17,7 @@
 (define-constant ERR-PAYMENT-LISTS-MISMATCH (err u115)) ;; Error returned when recipient and amount lists have different lengths.
 (define-constant ERR-EMPTY-PAYMENT-LIST (err u116)) ;; Error returned when payment list is empty.
 (define-constant ERR-PAYMENT-FAILED (err u117)) ;; Error returned when a payment transfer fails.
+(define-constant ERR-OWNER-TICKET-LIMIT (err u118)) ;; Error returned when a wallet exceeds the indexed ticket limit.
 
 (define-constant STATUS-ACTIVE u0) ;; Status code meaning the event is active and accepting ticket purchases.
 (define-constant STATUS-CANCELED u1) ;; Status code meaning the event has been canceled by its creator.
@@ -55,6 +56,10 @@
   {event-id: uint, seat: uint} ;; Map key specification combining the event identifier and seat number.
   {owner: principal, refunded: bool}) ;; Map value specification storing the principal that owns this seat and refund status.
 
+(define-map owner-tickets ;; Index map for owner -> list of ticket identifiers.
+  {owner: principal}
+  {tickets: (list 200 {event-id: uint, seat: uint})})
+
 (define-map token-metadata ;; Metadata URI map keyed by token identifier so wallets can resolve SIP-016 metadata.
   {event-id: uint, seat: uint}
   {uri: (string-ascii 256)})
@@ -64,6 +69,40 @@
 
 (define-non-fungible-token ticket ;; Declaration of the NFT collection used to represent tickets.
   {event-id: uint, seat: uint}) ;; Each NFT token identifier is the pair of event identifier and seat number.
+
+;; Private helper to read the ticket list for an owner.
+(define-private (read-owner-tickets (owner principal))
+  (match (map-get? owner-tickets {owner: owner})
+    owner-record (get tickets owner-record)
+    (list)))
+
+;; Private helper to append a ticket to an owner list.
+(define-private (add-owner-ticket (owner principal) (event-id uint) (seat uint))
+  (let ((current (read-owner-tickets owner)))
+    (begin
+      (asserts! (< (len current) u200) ERR-OWNER-TICKET-LIMIT)
+      (map-set owner-tickets
+        {owner: owner}
+        {tickets: (unwrap-panic (as-max-len? (append current (list {event-id: event-id, seat: seat})) u200))})
+      true)))
+
+;; Private helper used by fold to remove a ticket from an owner list.
+(define-private (remove-owner-ticket-fold
+  (ticket-entry {event-id: uint, seat: uint})
+  (context {items: (list 200 {event-id: uint, seat: uint}), event-id: uint, seat: uint}))
+  (if (and (is-eq (get event-id ticket-entry) (get event-id context))
+           (is-eq (get seat ticket-entry) (get seat context)))
+    context
+    (let ((next-items (unwrap-panic (as-max-len? (append (get items context) (list ticket-entry)) u200))))
+      {items: next-items, event-id: (get event-id context), seat: (get seat context)})))
+
+;; Private helper to remove a ticket from an owner list.
+(define-private (remove-owner-ticket (owner principal) (event-id uint) (seat uint))
+  (let ((current (read-owner-tickets owner))
+        (context {items: (list), event-id: event-id, seat: seat}))
+    (let ((final (fold remove-owner-ticket-fold current context)))
+      (map-set owner-tickets {owner: owner} {tickets: (get items final)})
+      true)))
 
 ;; function contract-owner: returns the principal that deployed this contract.
 (define-read-only (contract-owner)
@@ -83,6 +122,10 @@
     ticket-record ;; When the lookup succeeds, bind the ticket record to the name ticket-record.
     (ok {event-id: event-id, seat: seat, owner: (get owner ticket-record), refunded: (get refunded ticket-record)}) ;; Return the metadata as a response containing event id, seat, owner, and refund status.
     ERR-NO-TICKET)) ;; If the ticket does not exist, propagate an error indicating that no ticket was found.
+
+;; function get-owner-tickets: read-only helper that returns indexed tickets for a wallet.
+(define-read-only (get-owner-tickets (owner principal))
+  (ok (read-owner-tickets owner)))
 
 ;; function create-event: lets any caller register a new event with pricing, capacity, and metadata information.
 (define-public (create-event (title (string-ascii 64)) (date (string-ascii 32)) (price uint) (total-seats uint) (metadata-uri (string-ascii 256))) ;; Public function that lets any principal register a new event.
@@ -142,6 +185,7 @@
                          {event-id: event-id, ;; Use the event identifier as part of the NFT token identifier.
                           seat: seat} ;; Use the seat number as the second component of the NFT token identifier.
                          tx-sender)) ;; Assign ownership of the freshly minted NFT to the buyer.
+        (add-owner-ticket tx-sender event-id seat)
         (print {event: "ticket-purchased", event-id: event-id, seat: seat, buyer: tx-sender, price: (get price event-data)})
         (ok {event-id: event-id, seat: seat, owner: tx-sender}))))) ;; Return the ticket metadata confirming the purchase.
 
@@ -227,6 +271,8 @@
                           {event-id: event-id, seat: seat}
                           tx-sender
                           recipient))
+      (remove-owner-ticket tx-sender event-id seat)
+      (add-owner-ticket recipient event-id seat)
       
       (print {event: "ticket-transferred", event-id: event-id, seat: seat, from: tx-sender, to: recipient, fee: transfer-fee})
       (ok {event-id: event-id, seat: seat, from: tx-sender, to: recipient, fee: transfer-fee}))))
@@ -249,6 +295,7 @@
       
       ;; Burn the NFT since it's been refunded
       (try! (nft-burn? ticket {event-id: event-id, seat: seat} tx-sender))
+      (remove-owner-ticket tx-sender event-id seat)
       
       (print {event: "refund-claimed", event-id: event-id, seat: seat, owner: tx-sender, amount: (get price event-data)})
       (ok {event-id: event-id, seat: seat, refund-amount: (get price event-data)}))))
@@ -342,4 +389,3 @@
           successful-payments: (get success-count final-context),
           failed-payments: (get failed-count final-context),
           total-amount-sent: (get total-sent final-context)})))))
-
