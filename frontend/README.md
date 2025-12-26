@@ -22,7 +22,7 @@ This Next.js (App Router) experience surfaces the EventPass Clarity contract in 
 - Tailwind CSS + shadcn/ui primitives
 - Framer Motion for animation
 - Lucide icons
-- Reown WalletConnect for Stacks session management
+- Reown AppKit Universal Connector for Stacks wallet sessions (Leather, Xverse, WalletConnect)
 
 ## Contract Alignment
 
@@ -45,10 +45,10 @@ The create-event form derives the contract address and name from this identifier
 
 ## Wallet Integration
 
-The header’s **Connect Wallet** action connects through Reown WalletConnect and shows the active Stacks address inline.
+The header’s **Connect Wallet** action connects through the Reown Universal Connector and shows the active Stacks address inline.
 
 - Network: configure `NEXT_PUBLIC_STACKS_NETWORK` (`testnet` or `mainnet`) and `NEXT_PUBLIC_STACKS_API_BASE_URL` to align the app with your Stacks network.
-- WalletConnect: set `NEXT_PUBLIC_REOWN_PROJECT_ID` (defaults to the project id baked into `lib/walletconnect.ts`) and optionally `NEXT_PUBLIC_STACKS_WC_CHAIN_ID` if you need a custom CAIP-2 chain id.
+- WalletConnect: set `NEXT_PUBLIC_REOWN_PROJECT_ID` (defaults to the project id baked into `lib/walletconnect.ts`).
 
 ## Create Flow
 

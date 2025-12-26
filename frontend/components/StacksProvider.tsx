@@ -11,14 +11,13 @@ import {
   type ReactNode
 } from "react";
 import type { SessionTypes } from "@walletconnect/types";
-import type SignClient from "@walletconnect/sign-client";
+import type { UniversalConnector } from "@reown/appkit-universal-connector";
 
 import {
-  closeWalletConnectModal,
-  findStacksSession,
   getAddressFromSession,
-  getSignClient,
-  getStacksNamespaceConfig,
+  getStacksChainId,
+  getStacksSession,
+  getUniversalConnector,
   openWalletConnectModal,
   requestStacksAddresses,
   requestStacksContractCall
@@ -52,8 +51,9 @@ export const useStacks = () => {
 };
 
 const resolveAddress = async (
-  client: SignClient,
-  session: SessionTypes.Struct | null
+  connector: UniversalConnector,
+  session: SessionTypes.Struct | null,
+  chainId: string
 ) => {
   const fromSession = getAddressFromSession(session);
   if (fromSession) {
@@ -63,7 +63,7 @@ const resolveAddress = async (
     return null;
   }
   try {
-    return await requestStacksAddresses(client, session);
+    return await requestStacksAddresses(connector, chainId);
   } catch (error) {
     console.warn("Unable to resolve Stacks address from WalletConnect.", error);
     return null;
@@ -74,8 +74,9 @@ export function StacksProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionTypes.Struct | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const signClientRef = useRef<SignClient | null>(null);
+  const connectorRef = useRef<UniversalConnector | null>(null);
   const listenersAttachedRef = useRef(false);
+  const chainIdRef = useRef(getStacksChainId());
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -84,21 +85,24 @@ export function StacksProvider({ children }: { children: ReactNode }) {
 
     let isMounted = true;
     const initialize = async () => {
-      const client = await getSignClient();
+      const connector = await getUniversalConnector();
       if (!isMounted) {
         return;
       }
-      signClientRef.current = client;
+      connectorRef.current = connector;
       if (!listenersAttachedRef.current) {
-        client.on("session_update", ({ topic, params }) => {
-          const { namespaces } = params;
-          const existing = client.session.get(topic);
+        connector.provider?.on?.("session_update", ({ params }: { params: any }) => {
+          const { namespaces } = params ?? {};
+          const existing = connector.provider.session as SessionTypes.Struct | undefined;
+          if (!existing) {
+            return;
+          }
           const updated = { ...existing, namespaces };
           setSession(updated);
-          void resolveAddress(client, updated).then(setAddress);
+          void resolveAddress(connector, updated, chainIdRef.current).then(setAddress);
         });
 
-        client.on("session_delete", () => {
+        connector.provider?.on?.("session_delete", () => {
           setSession(null);
           setAddress(null);
         });
@@ -106,9 +110,13 @@ export function StacksProvider({ children }: { children: ReactNode }) {
         listenersAttachedRef.current = true;
       }
 
-      const existingSession = findStacksSession(client);
+      const existingSession = getStacksSession(connector);
       setSession(existingSession);
-      const resolvedAddress = await resolveAddress(client, existingSession);
+      const resolvedAddress = await resolveAddress(
+        connector,
+        existingSession,
+        chainIdRef.current
+      );
       setAddress(resolvedAddress);
     };
 
@@ -120,29 +128,27 @@ export function StacksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshSession = useCallback(async () => {
-    const client = signClientRef.current;
-    if (!client) {
+    const connector = connectorRef.current;
+    if (!connector) {
       return;
     }
-    const existingSession = findStacksSession(client);
+    const existingSession = getStacksSession(connector);
     setSession(existingSession);
-    const resolvedAddress = await resolveAddress(client, existingSession);
+    const resolvedAddress = await resolveAddress(
+      connector,
+      existingSession,
+      chainIdRef.current
+    );
     setAddress(resolvedAddress);
   }, []);
 
   const disconnect = useCallback(() => {
-    const client = signClientRef.current;
-    if (!client || !session) {
+    const connector = connectorRef.current;
+    if (!connector) {
       return;
     }
-    void client
-      .disconnect({
-        topic: session.topic,
-        reason: {
-          code: 6000,
-          message: "User disconnected"
-        }
-      })
+    void connector
+      .disconnect()
       .catch((error) => {
         console.warn("Failed to disconnect WalletConnect session.", error);
       })
@@ -154,31 +160,25 @@ export function StacksProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const connect = useCallback(() => {
-    const client = signClientRef.current;
-    if (!client) {
-      console.warn("WalletConnect client not ready yet.");
+    const connector = connectorRef.current;
+    if (!connector) {
+      console.warn("Universal Connector not ready yet.");
       return;
     }
 
     setIsAuthenticating(true);
     void (async () => {
       try {
-        const { uri, approval } = await client.connect({
-          requiredNamespaces: getStacksNamespaceConfig()
-        });
-
-        if (uri) {
-          openWalletConnectModal(uri);
-        }
-
-        const nextSession = await approval();
-        setSession(nextSession);
-        closeWalletConnectModal();
-        const resolvedAddress = await resolveAddress(client, nextSession);
+        const { session: providerSession } = await openWalletConnectModal(connector);
+        setSession(providerSession as SessionTypes.Struct);
+        const resolvedAddress = await resolveAddress(
+          connector,
+          providerSession as SessionTypes.Struct,
+          chainIdRef.current
+        );
         setAddress(resolvedAddress);
       } catch (error) {
         console.warn("WalletConnect connection failed.", error);
-        closeWalletConnectModal();
       } finally {
         setIsAuthenticating(false);
       }
@@ -192,11 +192,11 @@ export function StacksProvider({ children }: { children: ReactNode }) {
       functionName: string;
       functionArgs: ClarityValue[];
     }) => {
-      const client = signClientRef.current;
-      if (!client || !session) {
+      const connector = connectorRef.current;
+      if (!connector || !session) {
         throw new Error("Wallet not connected");
       }
-      return requestStacksContractCall(client, session, params);
+      return requestStacksContractCall(connector, chainIdRef.current, params);
     },
     [session]
   );
