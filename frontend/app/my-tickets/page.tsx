@@ -25,13 +25,13 @@ type UserTicket = {
 };
 
 export default function MyTicketsPage() {
-  const { userSession, address } = useStacks();
+  const { session, address } = useStacks();
   const [tickets, setTickets] = useState<UserTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadUserTickets = async () => {
-    if (!userSession || !address) {
+    if (!session || !address) {
       setIsLoading(false);
       return;
     }
@@ -144,7 +144,7 @@ export default function MyTicketsPage() {
 
   useEffect(() => {
     loadUserTickets();
-  }, [userSession]);
+  }, [session]);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -174,7 +174,7 @@ export default function MyTicketsPage() {
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold text-foreground">My Tickets</h1>
                 <p className="max-w-2xl text-sm text-muted-foreground">
-                  {!userSession
+                  {!session
                     ? "Connect your wallet to view your tickets"
                     : isLoading
                     ? "Loading your tickets..."
@@ -187,7 +187,7 @@ export default function MyTicketsPage() {
               size="sm"
               className="inline-flex items-center gap-2"
               onClick={loadUserTickets}
-              disabled={isLoading || !userSession}
+              disabled={isLoading || !session}
             >
               <RefreshCcw className="h-4 w-4" aria-hidden="true" />
               Refresh
@@ -202,7 +202,7 @@ export default function MyTicketsPage() {
             </div>
           ) : null}
 
-          {!userSession ? (
+          {!session ? (
             <div className="col-span-full rounded-2xl border border-dashed border-primary/40 bg-white/60 px-6 py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 Please connect your wallet to view your tickets

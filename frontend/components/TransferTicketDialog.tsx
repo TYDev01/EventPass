@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { uintCV, principalCV } from "@stacks/transactions";
-import { openContractCall } from "@stacks/connect";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,7 @@ export function TransferTicketDialog({
   originalPrice,
   onTransferComplete,
 }: TransferTicketDialogProps) {
-  const { userSession } = useStacks();
+  const { session, connect, callContract } = useStacks();
   const [recipientAddress, setRecipientAddress] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
@@ -47,8 +46,9 @@ export function TransferTicketDialog({
   const transferFee = Number((priceAsBigInt * BigInt(5)) / BigInt(100));
 
   const handleTransfer = async () => {
-    if (!userSession) {
+    if (!session) {
       toast.error("Please connect your wallet first");
+      connect();
       return;
     }
 
@@ -73,7 +73,7 @@ export function TransferTicketDialog({
     setIsTransferring(true);
 
     try {
-      await openContractCall({
+      const result = await callContract({
         contractAddress,
         contractName,
         functionName: "transfer-ticket",
@@ -82,21 +82,16 @@ export function TransferTicketDialog({
           uintCV(seat),
           principalCV(recipientAddress),
         ],
-        onFinish: (data) => {
-          console.log("Transfer transaction:", data);
-          toast.success("Ticket transfer initiated! Check your wallet for confirmation.");
-          setIsOpen(false);
-          setRecipientAddress("");
-          if (onTransferComplete) {
-            onTransferComplete();
-          }
-        },
-        onCancel: () => {
-          console.log("Transfer cancelled");
-          toast.info("Transfer cancelled");
-          setIsTransferring(false);
-        },
       });
+
+      console.log("Transfer transaction:", result);
+      toast.success("Ticket transfer initiated! Check your wallet for confirmation.");
+      setIsOpen(false);
+      setRecipientAddress("");
+      setIsTransferring(false);
+      if (onTransferComplete) {
+        onTransferComplete();
+      }
     } catch (error) {
       console.error("Transfer error:", error);
       toast.error("Failed to initiate transfer");

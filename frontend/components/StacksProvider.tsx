@@ -6,21 +6,38 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from "react";
-import { showConnect } from "@stacks/connect";
-import { UserSession } from "@stacks/auth";
+import type { SessionTypes } from "@walletconnect/types";
+import type { UniversalConnector } from "@reown/appkit-universal-connector";
 
-import { buildAuthOptions, clearSessionStore, createUserSession, extractAddress } from "@/lib/stacks";
+import {
+  getAddressFromSession,
+  getStacksChainId,
+  getStacksSession,
+  getUniversalConnector,
+  openWalletConnectModal,
+  requestStacksAddresses,
+  requestStacksContractCall
+} from "@/lib/walletconnect";
+import type { ClarityValue } from "@stacks/transactions";
 
 type StacksContextValue = {
-  userSession: UserSession | null;
+  session: SessionTypes.Struct | null;
   address: string | null;
   isAuthenticating: boolean;
+  isConnected: boolean;
   connect: () => void;
   disconnect: () => void;
   refreshSession: () => Promise<void>;
+  callContract: (params: {
+    contractAddress: string;
+    contractName: string;
+    functionName: string;
+    functionArgs: ClarityValue[];
+  }) => Promise<{ txid?: string; transaction?: string }>;
 };
 
 const StacksContext = createContext<StacksContextValue | undefined>(undefined);
@@ -33,109 +50,169 @@ export const useStacks = () => {
   return context;
 };
 
-const hydrateSession = async (
-  session: UserSession,
-  updateAddress: (address: string | null) => void,
-  setAuthenticating?: (value: boolean) => void
+const resolveAddress = async (
+  connector: UniversalConnector,
+  session: SessionTypes.Struct | null,
+  chainId: string
 ) => {
-  try {
-    if (session.isUserSignedIn()) {
-      const data = session.loadUserData();
-      updateAddress(extractAddress(data));
-      return;
-    }
-
-    if (session.isSignInPending()) {
-      await session.handlePendingSignIn();
-      const data = session.loadUserData();
-      updateAddress(extractAddress(data));
-      return;
-    }
-  } catch (error) {
-    console.warn("Unable to hydrate Leather session. Clearing cache.", error);
-    clearSessionStore(session);
-  } finally {
-    setAuthenticating?.(false);
+  const fromSession = getAddressFromSession(session);
+  if (fromSession) {
+    return fromSession;
   }
-
-  updateAddress(null);
+  if (!session) {
+    return null;
+  }
+  try {
+    return await requestStacksAddresses(connector, chainId);
+  } catch (error) {
+    console.warn("Unable to resolve Stacks address from WalletConnect.", error);
+    return null;
+  }
 };
 
 export function StacksProvider({ children }: { children: ReactNode }) {
-  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [session, setSession] = useState<SessionTypes.Struct | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const connectorRef = useRef<UniversalConnector | null>(null);
+  const listenersAttachedRef = useRef(false);
+  const chainIdRef = useRef(getStacksChainId());
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    const session = createUserSession();
-    setUserSession(session);
-    void hydrateSession(session, setAddress);
+
+    let isMounted = true;
+    const initialize = async () => {
+      const connector = await getUniversalConnector();
+      if (!isMounted) {
+        return;
+      }
+      connectorRef.current = connector;
+      if (!listenersAttachedRef.current) {
+        connector.provider?.on?.("session_update", ({ params }: { params: any }) => {
+          const { namespaces } = params ?? {};
+          const existing = connector.provider.session as SessionTypes.Struct | undefined;
+          if (!existing) {
+            return;
+          }
+          const updated = { ...existing, namespaces };
+          setSession(updated);
+          void resolveAddress(connector, updated, chainIdRef.current).then(setAddress);
+        });
+
+        connector.provider?.on?.("session_delete", () => {
+          setSession(null);
+          setAddress(null);
+        });
+
+        listenersAttachedRef.current = true;
+      }
+
+      const existingSession = getStacksSession(connector);
+      setSession(existingSession);
+      const resolvedAddress = await resolveAddress(
+        connector,
+        existingSession,
+        chainIdRef.current
+      );
+      setAddress(resolvedAddress);
+    };
+
+    void initialize();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const refreshSession = useCallback(async () => {
-    if (!userSession) {
+    const connector = connectorRef.current;
+    if (!connector) {
       return;
     }
-    await hydrateSession(userSession, setAddress);
-  }, [userSession]);
+    const existingSession = getStacksSession(connector);
+    setSession(existingSession);
+    const resolvedAddress = await resolveAddress(
+      connector,
+      existingSession,
+      chainIdRef.current
+    );
+    setAddress(resolvedAddress);
+  }, []);
 
   const disconnect = useCallback(() => {
-    if (!userSession) {
+    const connector = connectorRef.current;
+    if (!connector) {
       return;
     }
-    try {
-      userSession.signUserOut(window.location.href);
-    } catch (error) {
-      console.warn("Failed to sign out from Leather wallet.", error);
-    }
-    clearSessionStore(userSession);
-    setAddress(null);
-    setIsAuthenticating(false);
-  }, [userSession]);
+    void connector
+      .disconnect()
+      .catch((error) => {
+        console.warn("Failed to disconnect WalletConnect session.", error);
+      })
+      .finally(() => {
+        setSession(null);
+        setAddress(null);
+        setIsAuthenticating(false);
+      });
+  }, [session]);
 
   const connect = useCallback(() => {
-    if (!userSession) {
-      console.warn("User session unavailable. Recreating session.");
-      const session = createUserSession();
-      setUserSession(session);
-      setIsAuthenticating(true);
-      showConnect(
-        buildAuthOptions(session, {
-          onFinish: () => {
-            void hydrateSession(session, setAddress, setIsAuthenticating);
-          },
-          onCancel: () => setIsAuthenticating(false),
-          onClose: () => setIsAuthenticating(false)
-        })
-      );
+    const connector = connectorRef.current;
+    if (!connector) {
+      console.warn("Universal Connector not ready yet.");
       return;
     }
 
     setIsAuthenticating(true);
-    showConnect(
-      buildAuthOptions(userSession, {
-        onFinish: () => {
-          void hydrateSession(userSession, setAddress, setIsAuthenticating);
-        },
-        onCancel: () => setIsAuthenticating(false),
-        onClose: () => setIsAuthenticating(false)
-      })
-    );
-  }, [userSession]);
+    void (async () => {
+      try {
+        const { session: providerSession } = await openWalletConnectModal(connector);
+        setSession(providerSession as SessionTypes.Struct);
+        const resolvedAddress = await resolveAddress(
+          connector,
+          providerSession as SessionTypes.Struct,
+          chainIdRef.current
+        );
+        setAddress(resolvedAddress);
+      } catch (error) {
+        console.warn("WalletConnect connection failed.", error);
+      } finally {
+        setIsAuthenticating(false);
+      }
+    })();
+  }, []);
+
+  const callContract = useCallback(
+    async (params: {
+      contractAddress: string;
+      contractName: string;
+      functionName: string;
+      functionArgs: ClarityValue[];
+    }) => {
+      const connector = connectorRef.current;
+      if (!connector || !session) {
+        throw new Error("Wallet not connected");
+      }
+      return requestStacksContractCall(connector, chainIdRef.current, params);
+    },
+    [session]
+  );
 
   const value = useMemo<StacksContextValue>(
     () => ({
-      userSession,
+      session,
       address,
       isAuthenticating,
+      isConnected: Boolean(session && address),
       connect,
       disconnect,
-      refreshSession
+      refreshSession,
+      callContract
     }),
-    [address, connect, disconnect, isAuthenticating, refreshSession, userSession]
+    [address, callContract, connect, disconnect, isAuthenticating, refreshSession, session]
   );
 
   return <StacksContext.Provider value={value}>{children}</StacksContext.Provider>;

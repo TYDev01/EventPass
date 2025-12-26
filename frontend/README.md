@@ -22,7 +22,7 @@ This Next.js (App Router) experience surfaces the EventPass Clarity contract in 
 - Tailwind CSS + shadcn/ui primitives
 - Framer Motion for animation
 - Lucide icons
-- Leather wallet connections powered by `@stacks/connect`
+- Reown AppKit Universal Connector for Stacks wallet sessions (Leather, Xverse, WalletConnect)
 
 ## Contract Alignment
 
@@ -45,10 +45,11 @@ The create-event form derives the contract address and name from this identifier
 
 ## Wallet Integration
 
-The header’s **Connect Wallet** action authenticates with the Leather browser wallet using Stacks Connect. Signed-in addresses display inline, and users can disconnect to clear the session.
+The header’s **Connect Wallet** action connects through the Reown Universal Connector and shows the active Stacks address inline.
 
-- Network: configure `NEXT_PUBLIC_STACKS_NETWORK` (`testnet` or `mainnet`) and `NEXT_PUBLIC_STACKS_API_BASE_URL` to align the app with your Leather wallet network.
+- Network: configure `NEXT_PUBLIC_STACKS_NETWORK` (`testnet` or `mainnet`) and `NEXT_PUBLIC_STACKS_API_BASE_URL` to align the app with your Stacks network.
+- WalletConnect: set `NEXT_PUBLIC_REOWN_PROJECT_ID` (defaults to the project id baked into `lib/walletconnect.ts`).
 
 ## Create Flow
 
-Visit `/create` (or the **Create Event** link in the navigation) to launch the on-chain publisher. The form validates inputs, opens Leather via `openContractCall`, and reports the resulting transaction ID once submitted.
+Visit `/create` (or the **Create Event** link in the navigation) to launch the on-chain publisher. The form validates inputs, submits a WalletConnect `stx_callContract` request, and reports the resulting transaction ID once submitted.
