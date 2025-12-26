@@ -1,89 +1,112 @@
 # EventPass
 
-EventPass is a Clarity smart contract project for the Stacks blockchain that tokenizes event tickets as NFTs. Event creators can register events with basic metadata, pricing, and capacity. Attendees purchase seats by minting non-fungible tokens, ensuring that each ticket is unique, verifiable, and transferable on-chain.
+EventPass is a full-stack Stacks ticketing app. The Clarity contract mints seat-level NFTs for events, and the Next.js frontend provides a premium UI for creating events, buying tickets, transferring ownership, and exporting calendars.
 
-## Features
-- Register events with title, date, price, and total seat count.
-- Auto-incrementing event identifiers stored on-chain.
-- Seat-level ticket sales enforced through Clarity maps.
-- Lifecycle controls so creators can cancel or end events.
-- NFT minting for each purchased seat, tying ownership to the buyer.
-- Read-only helpers to inspect events, ticket metadata, and the next event id.
-- Comprehensive Vitest suite that exercises success paths and validation errors.
+## Smart Contract Features
+- Register events with title, date, price, seats, and metadata URI.
+- Seat-level NFT minting with on-chain ownership and SIP-016 metadata support.
+- Lifecycle controls for canceling or ending events.
+- Ticket transfers with a 5% creator fee.
+- Two-step refunds for canceled events (claim + creator payout).
+- Batch STX payments for creator workflows (e.g., staff payouts).
+- Read-only helpers for events, tickets, and metadata.
 
-## Contract Overview
-The main contract is `contracts/event-pass.clar` and includes:
-- Constants describing common error codes.
-- `events` map storing event metadata (`creator`, `title`, `date`, `price`, `total-seats`, `sold-seats`, `status`).
-- `tickets` map mapping `(event-id, seat)` to `owner`.
-- `ticket` NFT definition using the same `(event-id, seat)` tuple as its token identifier.
-- Public functions:
-  - `create-event`: Validates input, stores metadata, and increments the `next-event-id`.
-  - `purchase-ticket`: Validates seat availability, handles payment via `stx-transfer?`, records ownership, and mints the NFT.
-  - `cancel-event`: Lets the creator halt ticket sales by marking an event as canceled.
-  - `end-event`: Lets the creator mark an event as ended once it concludes.
-- Read-only helpers:
-  - `get-next-event-id`
-  - `get-event`
-  - `get-ticket-metadata`
-
-Inline comments explain each line of logic to aid onboarding and auditing.
+## Frontend Features
+- Event discovery with on-chain reads and graceful fallback sample data.
+- Create-event flow with metadata + image pinning via Pinata.
+- Real-time updates via Hiro websocket event streaming.
+- Ticket purchasing with QR payment preview and WalletConnect calls.
+- My Tickets view with transfer dialog.
+- Calendar view with ICS export + Google Calendar deep links.
+- Analytics view with export to XLSX and printable summaries.
 
 ## Project Structure
 ```
-Clarinet.toml            # Clarinet project manifest
+Clarinet.toml
 contracts/event-pass.clar
-deployments/default.simnet-plan.yaml
-settings/Devnet.toml
-settings/Mainnet.toml
-settings/Testnet.toml
-tests/event-pass.test.ts # Vitest suite using Clarinet simnet
-tsconfig.json
-vitest.config.js
-package.json / package-lock.json
-event.md                 # Quick project notes
+deployments/
+settings/
+tests/event-pass.test.ts
+frontend/
+README.md
 ```
 
 ## Prerequisites
 - Node.js 18+
 - npm
-- Clarinet CLI (`clarinet --version` should be available)
+- Clarinet CLI (`clarinet --version`)
+- A Stacks wallet (Leather, Xverse, or WalletConnect)
 
-Install Node dependencies once:
+## Setup
+
+Contract dev + tests:
 ```bash
 npm install
+clarinet check
+npm test
 ```
 
-## Development Tasks
-- **Lint contract syntax:** `clarinet check`
-- **Run tests:** `npm test`
-  - Executes Vitest with the Clarinet simnet environment (`tests/event-pass.test.ts`).
-- **Console REPL:** `clarinet console` (optional, for interactive experimentation).
+Frontend dev server:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Environment Variables
+Create `frontend/.env.local`:
+```bash
+NEXT_PUBLIC_CONTRACT_ADDRESS=ST...event-pass
+NEXT_PUBLIC_STACKS_NETWORK=testnet
+NEXT_PUBLIC_STACKS_API_BASE_URL=https://api.testnet.hiro.so
+NEXT_PUBLIC_REOWN_PROJECT_ID=your_reown_project_id
+NEXT_PUBLIC_PINATA_GATEWAY_URL=https://gateway.pinata.cloud/ipfs/
+PINATA_JWT=your_pinata_jwt
+```
+
+Notes:
+- `PINATA_JWT` is required for the `/api/pinata/*` routes used by the create flow.
+- `NEXT_PUBLIC_REOWN_PROJECT_ID` defaults to the in-code fallback if omitted.
+- `NEXT_PUBLIC_STACKS_API_BASE_URL` is optional; it defaults to Hiro’s public API per network.
+
+## API Routes
+- `POST /api/pinata/upload`: Upload an image file to Pinata (1 MB limit).
+- `POST /api/pinata/metadata`: Pin NFT metadata JSON to Pinata.
+- `POST /api/calendar/ics`: Generate an ICS calendar file for selected events.
+
+## Contract Functions (Public)
+- `create-event`
+- `purchase-ticket`
+- `cancel-event`
+- `end-event`
+- `transfer-ticket`
+- `claim-refund`
+- `process-refund`
+- `batch-pay`
+- `set-contract-metadata`
+
+## Contract Functions (Read-only)
+- `get-next-event-id`
+- `get-event`
+- `get-ticket-metadata`
+- `get-token-uri`
+- `get-contract-uri`
+- `contract-owner`
 
 ## Testing
-The Vitest suite covers:
-- Event creation with valid metadata.
-- Rejection of events with zero seats.
-- Ticket purchase flow including NFT minting.
-- Double-booking prevention.
-- Invalid seat numbers and unknown event ids.
-- Sold-out capacity rejections once the seat count is exhausted.
-- Lifecycle state transitions (cancel / end) and enforcement preventing sales on inactive events.
-- Read-only metadata access for sold and unsold seats.
-
-Run the tests after any contract changes to ensure behavior remains intact:
+The Vitest suite covers creation, purchase, transfer, refund, and lifecycle transitions.
 ```bash
 npm test
 ```
 
+## Known Gaps / Improvements to Consider
+- Add on-chain rate limiting or creator reputation (current limit is client-side).
+- Replace seat-by-seat ticket scans with owner-indexed lookups.
+- Align chainhook and transaction status polling with the configured network.
+- Add frontend unit + E2E tests (e.g., Testing Library, Playwright).
+- Add search + filtering UI and a resale marketplace (see `IMPROVEMENTS.md`).
+
 ## Deployment Notes
-- The `deployments/default.simnet-plan.yaml` file captures the deployment configuration used by Clarinet tooling for simnet, `clarinet check`, and tests.
-- Update the plan or add new batches when preparing for Devnet/Testnet/Mainnet deployments.
+Clarinet plans live in `deployments/`. Update or add batches before deploying to devnet/testnet/mainnet.
 
-## Further Improvements
-- Add refund logic or ticket transfers.
-- Introduce seat tiers or dynamic pricing.
-- Persist off-chain metadata URIs for richer ticket data.
-- Extend the TypeScript test suite with additional scenarios (e.g., multiple seat purchases per block, payment edge cases).
-
-EventPass demonstrates how to manage real-world ticketing workflows using Stacks smart contracts and provides a foundation for more advanced event platforms. Feel free to adapt and extend it for your own use case.
+EventPass demonstrates how to manage real-world ticketing workflows on Stacks and provides a strong foundation for building production-grade event platforms.

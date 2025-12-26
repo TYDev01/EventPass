@@ -275,7 +275,7 @@ export const fetchOnChainEvents = async (senderAddress?: string | null): Promise
       console.log(`  Queueing fetch for event ID: ${eventId.toString()}`);
       requests.push(fetchEventById(contractAddress, contractName, resolvedSender, eventId));
     }
-    console.log(`⏳ Fetching ${requests.length} events...`);
+    console.log(` Fetching ${requests.length} events...`);
     const results = await Promise.all(requests);
     events.push(...results.filter((item): item is OnChainEvent => Boolean(item)));
     console.log(` Successfully fetched ${events.length} events`);
