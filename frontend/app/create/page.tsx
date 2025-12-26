@@ -25,11 +25,6 @@ import {
 import { getContractParts } from "@/lib/stacks";
 import { EVENT_IMAGE_POOL, fetchNextEventId, fetchOnChainEvents, formatPriceFromMicroStx, type OnChainEvent } from "@/lib/events";
 import { addPendingEvent } from "@/lib/pending-events";
-import {
-  canCreateEventToday,
-  millisUntilNextCreation,
-  recordEventCreation
-} from "@/lib/creation-limit";
 
 const MAX_TITLE_LENGTH = 64;
 const MAX_DATE_LENGTH = 32;
@@ -66,16 +61,6 @@ export default function CreateEventPage() {
   const [userEvents, setUserEvents] = useState<OnChainEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : null;
-
-  const formatDuration = (millis: number) => {
-    const totalSeconds = Math.ceil(millis / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${Math.max(minutes, 1)}m`;
-  };
 
   // Fetch user's created events
   useEffect(() => {
@@ -171,12 +156,6 @@ export default function CreateEventPage() {
     if (!address || !session) {
       toast.info("Connect your wallet to create a new event.");
       connect();
-      return false;
-    }
-
-    if (!canCreateEventToday(address)) {
-      const remaining = millisUntilNextCreation(address);
-      toast.error(`You can create another event in ${formatDuration(remaining)}.`);
       return false;
     }
 
@@ -374,7 +353,6 @@ export default function CreateEventPage() {
         expectedEventId,
         metadataUri
       });
-      recordEventCreation(address);
       if (payload?.txid) {
         toast.success(`Event creation submitted! Track status via tx ${payload.txid}. Your listing will appear once the transaction confirms.`);
       } else {
@@ -789,13 +767,6 @@ export default function CreateEventPage() {
                 </div>
               )}
             </div>
-
-            {address && !canCreateEventToday(address) ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-                You can create another event in {formatDuration(millisUntilNextCreation(address))}.
-              </div>
-            ) : null}
-
 
             <div className="flex flex-wrap items-center justify-between gap-4">
               {shortAddress ? (
