@@ -18,6 +18,7 @@
 (define-constant ERR-EMPTY-PAYMENT-LIST (err u116)) ;; Error returned when payment list is empty.
 (define-constant ERR-PAYMENT-FAILED (err u117)) ;; Error returned when a payment transfer fails.
 (define-constant ERR-OWNER-TICKET-LIMIT (err u118)) ;; Error returned when a wallet exceeds the indexed ticket limit.
+(define-constant ERR-CREATOR-LIMIT (err u119)) ;; Error returned when a creator exceeds the event creation limit.
 
 (define-constant STATUS-ACTIVE u0) ;; Status code meaning the event is active and accepting ticket purchases.
 (define-constant STATUS-CANCELED u1) ;; Status code meaning the event has been canceled by its creator.
@@ -25,6 +26,8 @@
 
 (define-constant MAX-PRICE u1000000000000) ;; Maximum price cap: 1 million STX in micro-STX units to prevent overflow issues.
 (define-constant MAX-SEATS u10000) ;; Maximum seats per event: 10,000 to prevent excessive gas costs and ensure reasonable event sizes.
+(define-constant BLOCKS-PER-DAY u144) ;; Approximate Stacks blocks per day (10 min blocks).
+(define-constant MAX-EVENTS-PER-DAY u5) ;; Creator rate limit per day to prevent spam.
 
 ;; Private helper function to validate string input is not empty.
 (define-private (is-valid-string (str (string-ascii 64)))
@@ -66,6 +69,10 @@
 
 (define-data-var contract-metadata-uri (optional (string-ascii 256)) none) ;; Optional contract-level metadata URI advertised through SIP-016.
 (define-data-var deployer principal tx-sender) ;; Store the contract deployer as the owner.
+
+(define-map creator-limits ;; Storage map tracking daily event creation per creator.
+  {creator: principal}
+  {last-day: uint, events-today: uint})
 
 (define-non-fungible-token ticket ;; Declaration of the NFT collection used to represent tickets.
   {event-id: uint, seat: uint}) ;; Each NFT token identifier is the pair of event identifier and seat number.
@@ -112,6 +119,13 @@
 (define-read-only (get-next-event-id) ;; Read-only helper that reveals the next event identifier that will be assigned.
   (var-get next-event-id)) ;; Return the current value of the incrementing event counter.
 
+;; function get-creator-limit: returns rate-limit status for a creator.
+(define-read-only (get-creator-limit (creator principal))
+  (let ((current-day (/ block-height BLOCKS-PER-DAY)))
+    (match (map-get? creator-limits {creator: creator})
+      record (ok {current-day: current-day, last-day: (get last-day record), events-today: (get events-today record), max-per-day: MAX-EVENTS-PER-DAY})
+      (ok {current-day: current-day, last-day: u0, events-today: u0, max-per-day: MAX-EVENTS-PER-DAY}))))
+
 ;; function get-event: returns stored metadata for a particular event id when available.
 (define-read-only (get-event (event-id uint)) ;; Read-only helper that fetches the metadata for a single event.
   (map-get? events {event-id: event-id})) ;; Return the optional event record stored under the requested identifier.
@@ -136,6 +150,13 @@
     (asserts! (is-valid-uri metadata-uri) ERR-INVALID-INPUT) ;; Ensure metadata URI is not empty.
     (asserts! (is-valid-price price) ERR-INVALID-PRICE) ;; Ensure price is valid and within bounds.
     (asserts! (is-valid-seats total-seats) ERR-ZERO-SEATS) ;; Ensure seats are valid and within bounds.
+    (let ((current-day (/ block-height BLOCKS-PER-DAY)))
+      (let ((limit-record (map-get? creator-limits {creator: tx-sender})))
+        (let ((last-day (if (is-some limit-record) (get last-day (unwrap-panic limit-record)) u0))
+              (events-today (if (is-some limit-record) (get events-today (unwrap-panic limit-record)) u0)))
+          (let ((next-count (if (is-eq last-day current-day) (+ events-today u1) u1)))
+            (asserts! (<= next-count MAX-EVENTS-PER-DAY) ERR-CREATOR-LIMIT)
+            (map-set creator-limits {creator: tx-sender} {last-day: current-day, events-today: next-count})))))
     (let ((event-id (var-get next-event-id))) ;; Grab the current counter value so we can use it as the new event identifier.
       (begin ;; Sequence the state changes required to register the event.
         (map-set events ;; Persist the new event metadata into storage.
