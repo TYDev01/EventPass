@@ -41,9 +41,12 @@ import { useStacks } from "@/components/StacksProvider";
 import type { EventPassEvent } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getChainhookClient } from "@/lib/chainhook-client";
-import { getContractParts } from "@/lib/stacks";
+import { CORE_API_BASE_URL, getContractParts } from "@/lib/stacks";
 
-const FALLBACK_WINDOW_DAYS = 14;
+const SALES_WINDOW_HOURS = 72;
+const VELOCITY_BUCKET_HOURS = 6;
+const CONTRACT_EVENTS_PAGE_SIZE = 50;
+const MAX_CONTRACT_EVENTS_PAGES = 6;
 
 const parsePriceToStx = (event: EventPassEvent): number => {
   if (event.priceMicroStx !== undefined) {
@@ -53,35 +56,14 @@ const parsePriceToStx = (event: EventPassEvent): number => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const buildSalesSeries = (event: EventPassEvent) => {
-  const totalSold = Math.max(event.sold, 0);
-  const dailyBase = totalSold / FALLBACK_WINDOW_DAYS;
-  const now = new Date();
-  let cumulative = 0;
+const buildTierData = (_event: EventPassEvent, soldCount: number) => [
+  { name: "Standard", value: Math.max(soldCount, 0) }
+];
 
-  return Array.from({ length: FALLBACK_WINDOW_DAYS }).map((_, index) => {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (FALLBACK_WINDOW_DAYS - 1 - index));
-    const swing = Math.sin(index / 2.4) * 0.8 + 1;
-    const soldToday = Math.max(0, Math.round(dailyBase * swing));
-    cumulative = Math.min(totalSold, cumulative + soldToday);
-    return {
-      date: day.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      sold: cumulative,
-      revenue: Number((cumulative * parsePriceToStx(event)).toFixed(2))
-    };
-  });
-};
+const formatDayLabel = (date: Date) =>
+  date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-const buildVelocitySeries = (event: EventPassEvent) => {
-  const sold = Math.max(event.sold, 0);
-  const hours = 72;
-  const perHour = sold / hours;
-  return Array.from({ length: 12 }).map((_, index) => {
-    const label = `${(index + 1) * 6}h`;
-    const value = Math.max(0, Math.round(perHour * (index + 1) * 0.9));
-    return { label, value };
-  });
-};
+const formatDayKey = (date: Date) => date.toISOString().slice(0, 10);
 
 const buildDailyDeltaSeries = (series: { date: string; sold: number }[]) => {
   let last = 0;
@@ -105,44 +87,200 @@ const buildWeeklySeries = (daily: { date: string; value: number }[]) => {
   return weeks;
 };
 
-const buildFunnelData = (event: EventPassEvent) => {
-  const views = Math.max(event.sold * 12, 240);
-  const addToCart = Math.round(views * 0.28);
-  const checkout = Math.round(addToCart * 0.6);
-  return [
-    { stage: "Event views", value: views },
-    { stage: "Checkout started", value: checkout },
-    { stage: "Tickets sold", value: event.sold }
-  ];
+type ContractLogEvent = {
+  event_type?: string;
+  tx_id?: string;
+  block_time?: number;
+  block_time_iso?: string;
+  burn_block_time_iso?: string;
+  contract_log?: {
+    value?: {
+      repr?: string;
+    };
+  };
 };
 
-const buildTierData = (event: EventPassEvent) => [
-  { name: "Standard", value: Math.max(event.sold, 0) }
-];
+type ParsedContractEvent = {
+  event: string;
+  eventId: number;
+  seat?: number;
+  priceMicroStx?: bigint;
+  timestamp: Date;
+};
 
-const buildHeatmap = (event: EventPassEvent) => {
-  const grid = [];
-  const base = Math.max(event.sold, 1);
+const parsePrintEvent = (repr: string | undefined) => {
+  if (!repr) {
+    return null;
+  }
+  const eventMatch = repr.match(/\(event \"([^\"]+)\"\)/);
+  const eventIdMatch = repr.match(/\(event-id u(\d+)\)/);
+  if (!eventMatch || !eventIdMatch) {
+    return null;
+  }
+  const seatMatch = repr.match(/\(seat u(\d+)\)/);
+  const priceMatch = repr.match(/\(price u(\d+)\)/);
+  return {
+    event: eventMatch[1],
+    eventId: Number(eventIdMatch[1]),
+    seat: seatMatch ? Number(seatMatch[1]) : undefined,
+    priceMicroStx: priceMatch ? BigInt(priceMatch[1]) : undefined
+  };
+};
+
+const parseContractEvents = (events: ContractLogEvent[]): ParsedContractEvent[] => {
+  return events.flatMap((event) => {
+    if (event.event_type !== "smart_contract_log") {
+      return [];
+    }
+    const parsed = parsePrintEvent(event.contract_log?.value?.repr);
+    if (!parsed || !Number.isFinite(parsed.eventId)) {
+      return [];
+    }
+    const timestamp =
+      event.burn_block_time_iso ||
+      event.block_time_iso ||
+      (event.block_time ? new Date(event.block_time * 1000).toISOString() : null);
+    if (!timestamp) {
+      return [];
+    }
+    return [
+      {
+        ...parsed,
+        timestamp: new Date(timestamp)
+      }
+    ];
+  });
+};
+
+const fetchContractEvents = async (contractId: string) => {
+  const collected: ContractLogEvent[] = [];
+  for (let page = 0; page < MAX_CONTRACT_EVENTS_PAGES; page += 1) {
+    const offset = page * CONTRACT_EVENTS_PAGE_SIZE;
+    const url = `${CORE_API_BASE_URL}/extended/v1/contract/${contractId}/events?limit=${CONTRACT_EVENTS_PAGE_SIZE}&offset=${offset}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Unable to fetch contract events");
+    }
+    const payload = await response.json();
+    const events = (payload?.events ?? payload?.results ?? []) as ContractLogEvent[];
+    if (!Array.isArray(events) || events.length === 0) {
+      break;
+    }
+    collected.push(...events);
+    if (events.length < CONTRACT_EVENTS_PAGE_SIZE) {
+      break;
+    }
+  }
+  return collected;
+};
+
+const buildSalesSeriesFromPurchases = (
+  purchases: ParsedContractEvent[],
+  pricePerTicket: number
+) => {
+  if (purchases.length === 0) {
+    return [];
+  }
+  const sorted = [...purchases].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  const dailyCounts = new Map<string, number>();
+  sorted.forEach((purchase) => {
+    const key = formatDayKey(purchase.timestamp);
+    dailyCounts.set(key, (dailyCounts.get(key) ?? 0) + 1);
+  });
+
+  const start = sorted[0].timestamp;
+  const end = sorted[sorted.length - 1].timestamp;
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const series: { date: string; sold: number; revenue: number }[] = [];
+  let cumulative = 0;
+
+  while (cursor <= endDay) {
+    const key = formatDayKey(cursor);
+    const soldToday = dailyCounts.get(key) ?? 0;
+    cumulative += soldToday;
+    series.push({
+      date: formatDayLabel(cursor),
+      sold: cumulative,
+      revenue: Number((cumulative * pricePerTicket).toFixed(2))
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return series;
+};
+
+const buildVelocitySeriesFromPurchases = (purchases: ParsedContractEvent[]) => {
+  const buckets = Array.from({ length: SALES_WINDOW_HOURS / VELOCITY_BUCKET_HOURS }).map(
+    (_, index) => ({
+      label: `${(index + 1) * VELOCITY_BUCKET_HOURS}h`,
+      value: 0
+    })
+  );
+  if (purchases.length === 0) {
+    return buckets;
+  }
+  const end = new Date();
+  const start = new Date(end.getTime() - SALES_WINDOW_HOURS * 60 * 60 * 1000);
+  purchases.forEach((purchase) => {
+    if (purchase.timestamp < start || purchase.timestamp > end) {
+      return;
+    }
+    const diff = purchase.timestamp.getTime() - start.getTime();
+    const bucketIndex = Math.min(
+      buckets.length - 1,
+      Math.max(0, Math.floor(diff / (VELOCITY_BUCKET_HOURS * 60 * 60 * 1000)))
+    );
+    buckets[bucketIndex].value += 1;
+  });
+  return buckets;
+};
+
+const buildPeakSeriesFromPurchases = (purchases: ParsedContractEvent[]) => {
+  const buckets = [
+    { label: "Morning", value: 0 },
+    { label: "Afternoon", value: 0 },
+    { label: "Evening", value: 0 },
+    { label: "Night", value: 0 }
+  ];
+  purchases.forEach((purchase) => {
+    const hour = purchase.timestamp.getHours();
+    if (hour >= 6 && hour < 12) {
+      buckets[0].value += 1;
+    } else if (hour >= 12 && hour < 18) {
+      buckets[1].value += 1;
+    } else if (hour >= 18 && hour < 24) {
+      buckets[2].value += 1;
+    } else {
+      buckets[3].value += 1;
+    }
+  });
+  return buckets;
+};
+
+const buildHeatmapFromPurchases = (purchases: ParsedContractEvent[]) => {
+  const counts: number[][] = Array.from({ length: 7 }, () => Array(6).fill(0));
+  purchases.forEach((purchase) => {
+    const date = purchase.timestamp;
+    const dayIndex = (date.getDay() + 6) % 7;
+    const slotIndex = Math.min(5, Math.floor(date.getHours() / 4));
+    counts[dayIndex][slotIndex] += 1;
+  });
+  const maxCount = counts.flat().reduce((max, value) => Math.max(max, value), 0);
+  const cells = [];
   for (let day = 0; day < 7; day += 1) {
     for (let slot = 0; slot < 6; slot += 1) {
-      const intensity = Math.min(1, (base / 120) * (0.4 + Math.sin((day + slot) * 0.6) * 0.3));
-      grid.push({
+      const value = maxCount > 0 ? counts[day][slot] / maxCount : 0;
+      cells.push({
         key: `${day}-${slot}`,
         day,
         slot,
-        value: Math.max(0.05, intensity)
+        value
       });
     }
   }
-  return grid;
+  return cells;
 };
-
-const buildPeakTimes = () => [
-  { label: "Morning", value: 18 },
-  { label: "Afternoon", value: 42 },
-  { label: "Evening", value: 30 },
-  { label: "Night", value: 10 }
-];
 
 export default function AnalyticsPage() {
   const searchParams = useSearchParams();
@@ -153,6 +291,10 @@ export default function AnalyticsPage() {
   const printRef = useRef<HTMLDivElement | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date());
   const [liveEnabled, setLiveEnabled] = useState(true);
+  const [logRefreshToken, setLogRefreshToken] = useState(0);
+  const [contractEvents, setContractEvents] = useState<ParsedContractEvent[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
 
   const userEvents = useMemo(() => {
     if (!address) {
@@ -175,52 +317,122 @@ export default function AnalyticsPage() {
     return defaultEvent ?? null;
   }, [defaultEvent, selectedEventId, userEvents]);
 
+  useEffect(() => {
+    if (!contractConfigured) {
+      return;
+    }
+    const contractId = `${contractAddress}.${contractName}`;
+    let cancelled = false;
+    setLogLoading(true);
+    setLogError(null);
+    fetchContractEvents(contractId)
+      .then((events) => {
+        if (cancelled) {
+          return;
+        }
+        setContractEvents(parseContractEvents(events));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        console.error("Failed to load contract events", error);
+        setLogError("Unable to load indexed contract events.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLogLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contractConfigured, contractAddress, contractName, logRefreshToken]);
+
+  const filteredEvents = useMemo(() => {
+    if (!selectedEvent) {
+      return [];
+    }
+    return contractEvents.filter((event) => event.eventId === selectedEvent.id);
+  }, [contractEvents, selectedEvent]);
+
+  const purchaseEvents = useMemo(
+    () => filteredEvents.filter((event) => event.event === "ticket-purchased"),
+    [filteredEvents]
+  );
+
+  const refundClaimedEvents = useMemo(
+    () => filteredEvents.filter((event) => event.event === "refund-claimed"),
+    [filteredEvents]
+  );
+
+  const refundProcessedEvents = useMemo(
+    () => filteredEvents.filter((event) => event.event === "refund-processed"),
+    [filteredEvents]
+  );
+
+  const transferEvents = useMemo(
+    () => filteredEvents.filter((event) => event.event === "ticket-transferred"),
+    [filteredEvents]
+  );
+
+  const derivedSoldCount = selectedEvent
+    ? purchaseEvents.length > 0
+      ? purchaseEvents.length
+      : selectedEvent.sold
+    : 0;
+
+  const pricePerTicket = selectedEvent ? parsePriceToStx(selectedEvent) : 0;
+
   const salesSeries = useMemo(() => {
     if (!selectedEvent) {
       return [];
     }
-    return buildSalesSeries(selectedEvent);
-  }, [selectedEvent]);
+    return buildSalesSeriesFromPurchases(purchaseEvents, pricePerTicket);
+  }, [purchaseEvents, pricePerTicket, selectedEvent]);
 
   const dailySeries = useMemo(() => buildDailyDeltaSeries(salesSeries), [salesSeries]);
   const weeklySeries = useMemo(() => buildWeeklySeries(dailySeries), [dailySeries]);
 
-  const velocitySeries = useMemo(() => {
-    if (!selectedEvent) {
-      return [];
-    }
-    return buildVelocitySeries(selectedEvent);
-  }, [selectedEvent]);
+  const velocitySeries = useMemo(
+    () => buildVelocitySeriesFromPurchases(purchaseEvents),
+    [purchaseEvents]
+  );
 
   const funnelSeries = useMemo(() => {
     if (!selectedEvent) {
       return [];
     }
-    return buildFunnelData(selectedEvent);
-  }, [selectedEvent]);
+    return [
+      { stage: "Tickets sold", value: derivedSoldCount },
+      { stage: "Transfers", value: transferEvents.length },
+      { stage: "Refunds processed", value: refundProcessedEvents.length }
+    ];
+  }, [derivedSoldCount, refundProcessedEvents.length, selectedEvent, transferEvents.length]);
 
   const tierSeries = useMemo(() => {
     if (!selectedEvent) {
       return [];
     }
-    return buildTierData(selectedEvent);
-  }, [selectedEvent]);
+    return buildTierData(selectedEvent, derivedSoldCount);
+  }, [derivedSoldCount, selectedEvent]);
 
-  const heatmapSeries = useMemo(() => {
-    if (!selectedEvent) {
-      return [];
-    }
-    return buildHeatmap(selectedEvent);
-  }, [selectedEvent]);
+  const heatmapSeries = useMemo(
+    () => buildHeatmapFromPurchases(purchaseEvents),
+    [purchaseEvents]
+  );
 
-  const peakSeries = useMemo(() => buildPeakTimes(), []);
+  const peakSeries = useMemo(
+    () => buildPeakSeriesFromPurchases(purchaseEvents),
+    [purchaseEvents]
+  );
 
   const totalRevenue = useMemo(() => {
     if (!selectedEvent) {
       return 0;
     }
-    return Number((selectedEvent.sold * parsePriceToStx(selectedEvent)).toFixed(2));
-  }, [selectedEvent]);
+    return Number((derivedSoldCount * pricePerTicket).toFixed(2));
+  }, [derivedSoldCount, pricePerTicket, selectedEvent]);
 
   const similarEvents = useMemo(() => {
     if (!selectedEvent) {
@@ -246,17 +458,19 @@ export default function AnalyticsPage() {
       ).toFixed(2)
     );
     return [
-      { label: "Your event", sold: selectedEvent.sold, revenue: totalRevenue },
+      { label: "Your event", sold: derivedSoldCount, revenue: totalRevenue },
       { label: "Category avg", sold: avgSold, revenue: avgRevenue }
     ];
-  }, [selectedEvent, similarEvents, totalRevenue]);
+  }, [derivedSoldCount, selectedEvent, similarEvents, totalRevenue]);
 
-  const ticketsPerHour = selectedEvent ? Number((selectedEvent.sold / 72).toFixed(2)) : 0;
-  const avgTicketPrice = selectedEvent && selectedEvent.sold > 0
-    ? Number((totalRevenue / selectedEvent.sold).toFixed(2))
+  const ticketsPerHour = selectedEvent
+    ? Number((purchaseEvents.length / SALES_WINDOW_HOURS).toFixed(2))
+    : 0;
+  const avgTicketPrice = selectedEvent && derivedSoldCount > 0
+    ? Number((totalRevenue / derivedSoldCount).toFixed(2))
     : 0;
   const sellThrough = selectedEvent && selectedEvent.seats > 0
-    ? Math.min(100, Math.round((selectedEvent.sold / selectedEvent.seats) * 100))
+    ? Math.min(100, Math.round((derivedSoldCount / selectedEvent.seats) * 100))
     : 0;
 
   const topSalesDays = useMemo(() => {
@@ -267,7 +481,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     setUpdatedAt(new Date());
-  }, [events, selectedEventId]);
+  }, [events, selectedEventId, contractEvents.length]);
 
   useEffect(() => {
     if (!liveEnabled) {
@@ -275,6 +489,7 @@ export default function AnalyticsPage() {
     }
     const interval = window.setInterval(() => {
       refresh();
+      setLogRefreshToken((token) => token + 1);
     }, 15000);
     return () => window.clearInterval(interval);
   }, [liveEnabled, refresh]);
@@ -293,6 +508,7 @@ export default function AnalyticsPage() {
         return;
       }
       refresh();
+      setLogRefreshToken((token) => token + 1);
       setUpdatedAt(new Date());
     };
     const unsubscribeCreated = client.on("event-created", handler);
@@ -364,7 +580,7 @@ export default function AnalyticsPage() {
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold text-foreground">Ticket analytics</h1>
                 <p className="max-w-2xl text-sm text-muted-foreground">
-                  Live analytics for your active EventPass drops. Charts are estimated from on-chain totals until per-ticket timestamps are available.
+                  Live analytics for your active EventPass drops. Charts are built from indexed on-chain events and update as new transactions confirm.
                 </p>
               </div>
             </div>
@@ -396,6 +612,15 @@ export default function AnalyticsPage() {
           </div>
         ) : (
           <section ref={printRef} className="space-y-6">
+            {logError ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+                {logError} Showing contract totals where possible.
+              </div>
+            ) : logLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-600">
+                Loading indexed contract events...
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Active event</p>
@@ -450,7 +675,7 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {selectedEvent?.sold ?? 0} tickets sold · {selectedEvent?.seats ?? 0} seats
+                  {derivedSoldCount} tickets sold · {selectedEvent?.seats ?? 0} seats
                 </p>
               </div>
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
@@ -464,7 +689,7 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Estimated based on last 72 hours of sales.
+                  Based on the last 72 hours of on-chain ticket purchases.
                 </p>
               </div>
             </div>
@@ -512,7 +737,7 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Tier breakdown available once pricing tiers are added.
+                  Tier breakdown will expand once multi-tier pricing is on-chain.
                 </p>
               </div>
             </div>
@@ -611,7 +836,7 @@ export default function AnalyticsPage() {
                   <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
                     <span>Remaining inventory</span>
                     <span className="font-semibold text-foreground">
-                      {Math.max(0, (selectedEvent?.seats ?? 0) - (selectedEvent?.sold ?? 0))}
+                      {Math.max(0, (selectedEvent?.seats ?? 0) - derivedSoldCount)}
                     </span>
                   </div>
                 </div>
@@ -641,7 +866,7 @@ export default function AnalyticsPage() {
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <BarChart3 className="h-4 w-4" />
-                  <span className="font-medium text-foreground">Conversion funnel</span>
+                  <span className="font-medium text-foreground">On-chain activity</span>
                 </div>
                 <div className="mt-4 h-56">
                   <ResponsiveContainer width="100%" height="100%">
@@ -654,7 +879,7 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Funnel stages are estimated until page-view tracking is wired.
+                  Activity stages reflect indexed on-chain events for this drop.
                 </p>
               </div>
 
@@ -666,7 +891,11 @@ export default function AnalyticsPage() {
                 <div className="mt-4 space-y-3 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
                     <span>Refunds processed</span>
-                    <span className="font-semibold text-foreground">0</span>
+                    <span className="font-semibold text-foreground">{refundProcessedEvents.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
+                    <span>Refunds claimed</span>
+                    <span className="font-semibold text-foreground">{refundClaimedEvents.length}</span>
                   </div>
                   <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
                     <span>Event status</span>
@@ -680,12 +909,9 @@ export default function AnalyticsPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between rounded-lg border border-border/60 bg-white px-3 py-2">
-                    <span>Estimated cancellations</span>
-                    <span className="font-semibold text-foreground">0</span>
+                    <span>Transfers</span>
+                    <span className="font-semibold text-foreground">{transferEvents.length}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Refund analytics will populate once refund events are indexed.
-                  </p>
                 </div>
               </div>
             </div>
@@ -712,7 +938,7 @@ export default function AnalyticsPage() {
                     />
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">Heatmap represents estimated purchase clusters.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Heatmap represents indexed purchase timestamps.</p>
               </div>
 
               <div className="rounded-[1.5rem] border border-white/70 bg-white/90 p-6 shadow-sm">
