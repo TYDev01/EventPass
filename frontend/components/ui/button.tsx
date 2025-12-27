@@ -14,9 +14,10 @@ const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground shadow-[0_20px_40px_-20px_rgba(252,100,50,0.65)] hover:bg-primary/90 hover:shadow-[0_25px_45px_-20px_rgba(252,100,50,0.65)]",
         outline:
-          "border border-border/70 bg-white/60 text-foreground hover:border-primary/50 hover:text-primary",
+          "border border-border/70 bg-white/60 text-foreground hover:border-primary/50 hover:text-primary dark:border-white/10 dark:bg-black/40 dark:hover:border-primary/60 dark:hover:text-primary",
         ghost: "text-foreground/80 hover:text-primary",
-        subtle: "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+        subtle:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
       },
       size: {
         default: "h-11 px-5",
